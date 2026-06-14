@@ -31,6 +31,7 @@ metadata:
     # Health check settings
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/success-codes: "200,404"
 spec:
   ingressClassName: alb
   rules:
