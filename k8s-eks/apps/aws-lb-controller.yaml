@@ -23,6 +23,8 @@ spec:
     helm:
       values: |
         clusterName: jerney-eks
+        region: ap-south-1
+        vpcId: vpc-0982c6d5757887327
         serviceAccount:
           create: true
           name: aws-load-balancer-controller
