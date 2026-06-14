@@ -93,24 +93,27 @@ module "secrets_manager" {
   tags                    = local.common_tags
 }
 
-# ---- Cluster auth for the helm + kubectl providers ----
-data "aws_eks_cluster_auth" "main" {
-  name = module.eks_cluster.cluster_name
-}
-
 provider "helm" {
   kubernetes {
     host                   = module.eks_cluster.cluster_endpoint
     cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
-    token                  = data.aws_eks_cluster_auth.main.token
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.eks_cluster.cluster_name, "--region", var.aws_region, "--profile", var.aws_profile]
+    }
   }
 }
 
 provider "kubectl" {
   host                   = module.eks_cluster.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
-  token                  = data.aws_eks_cluster_auth.main.token
   load_config_file       = false
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks_cluster.cluster_name, "--region", var.aws_region, "--profile", var.aws_profile]
+  }
 }
 
 module "eks_bootstrap" {
