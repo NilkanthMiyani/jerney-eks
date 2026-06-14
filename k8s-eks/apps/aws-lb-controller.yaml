@@ -22,7 +22,7 @@ spec:
     targetRevision: "1.11.x"
     helm:
       values: |
-        clusterName: jerney-eks
+        clusterName: jerney-eks-dev
         region: ap-south-1
         vpcId: vpc-0982c6d5757887327
         serviceAccount:
