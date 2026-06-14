@@ -101,6 +101,9 @@ provider "helm" {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
       args        = ["eks", "get-token", "--cluster-name", module.eks_cluster.cluster_name, "--region", var.aws_region, "--profile", var.aws_profile]
+      env = {
+        AWS_PROFILE = var.aws_profile
+      }
     }
   }
 }
@@ -113,6 +116,9 @@ provider "kubectl" {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
     args        = ["eks", "get-token", "--cluster-name", module.eks_cluster.cluster_name, "--region", var.aws_region, "--profile", var.aws_profile]
+    env = {
+      AWS_PROFILE = var.aws_profile
+    }
   }
 }
 

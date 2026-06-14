@@ -27,7 +27,7 @@ spec:
           create: true
           name: aws-load-balancer-controller
           annotations:
-            eks.amazonaws.com/role-arn: REPLACE_WITH_ALB_CONTROLLER_ROLE_ARN
+            eks.amazonaws.com/role-arn: arn:aws:iam::310318659882:role/jerney-eks-dev-alb-controller-role
         replicaCount: 1
         resources:
           requests:

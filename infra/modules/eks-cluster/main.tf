@@ -56,6 +56,25 @@ resource "aws_eks_cluster" "main" {
   tags = var.tags
 }
 
+# ---- EKS Access Entry for the Creator ----
+data "aws_caller_identity" "current" {}
+
+resource "aws_eks_access_entry" "creator" {
+  cluster_name      = aws_eks_cluster.main.name
+  principal_arn     = data.aws_caller_identity.current.arn
+  type              = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "creator" {
+  cluster_name  = aws_eks_cluster.main.name
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  principal_arn = aws_eks_access_entry.creator.principal_arn
+
+  access_scope {
+    type = "cluster"
+  }
+}
+
 # ---- OIDC Provider for IRSA ----
 data "tls_certificate" "eks" {
   url = aws_eks_cluster.main.identity[0].oidc[0].issuer
