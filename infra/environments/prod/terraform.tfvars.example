@@ -1,0 +1,37 @@
+# ---------------------------------------------------------------
+# PROD — copy to terraform.tfvars and fill in the secrets below.
+#
+# NOTE: prod sets endpoint_public_access = false, so Terraform's
+# helm/kubectl providers must reach the private API endpoint — run
+# applies from inside the VPC, a peered network, or over VPN.
+#
+# Before first apply: run infra/bootstrap, then set the bucket name
+# in versions.tf (backend "s3" { bucket = ... }).
+# ---------------------------------------------------------------
+
+# ---- Required: application secrets seeded into AWS Secrets Manager ----
+postgres_password      = "REPLACE_ME"
+grafana_admin_password = "REPLACE_ME"
+alertmanager_smtp_key  = "REPLACE_ME"
+
+# ---- Optional overrides (values shown are the prod defaults) ----
+# Uncomment and edit any you want to change.
+
+# cluster_name        = "jerney-eks-prod"
+# kubernetes_version  = "1.35"
+
+# node_instance_types = ["t3.large"]
+# capacity_type       = "ON_DEMAND"     # SPOT (cheap) or ON_DEMAND (stable)
+# min_node_count      = 3               # also the initial desired size
+# max_node_count      = 10
+# disk_size_gb        = 100
+
+# endpoint_public_access  = false       # private API only (VPC/VPN access)
+# recovery_window_in_days = 30          # days before a deleted secret is purged
+
+# domain_name             = "*.nilkanthprojects.site"
+# acm_certificate_arn     = "arn:aws:acm:ap-south-1:310318659882:certificate/9144a150-f7ed-4286-8e3d-18e81950e4ee"
+
+# gitops_repo_url         = "https://github.com/NilkanthMiyani/jerney-eks.git"
+# gitops_target_revision  = "prod"      # branch ArgoCD tracks
+# gitops_apps_path        = "k8s-eks/apps"

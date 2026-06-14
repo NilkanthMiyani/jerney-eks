@@ -1,0 +1,53 @@
+# ==============================================================
+# Jerney ALB Ingress — EKS
+#
+# Replaces NGINX Ingress (GKE/AKS).
+# AWS Load Balancer Controller provisions an ALB that:
+#   - Terminates TLS using ACM wildcard certificate (no cert-manager)
+#   - Routes /api → backend:5000, / → frontend:80
+#   - Shares ALB with platform Ingresses via group.name
+#   - Redirects HTTP→HTTPS via ssl-redirect annotation
+# ==============================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Chart.Name }}-ingress
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/part-of: {{ .Chart.Name }}
+  annotations:
+    # ALB scheme: internet-facing creates a public ALB
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # ip target type: ALB routes directly to pod IPs (VPC CNI)
+    alb.ingress.kubernetes.io/target-type: ip
+    # TLS: ACM certificate ARN — ALB terminates TLS (replaces cert-manager)
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn }}
+    # Listen on HTTPS only
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+    # HTTP→HTTPS redirect (replaces nginx.ingress.kubernetes.io/ssl-redirect)
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # Group name: all Ingresses with same group share one ALB (cost saving)
+    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.groupName }}
+    # Health check settings
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+spec:
+  ingressClassName: alb
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Chart.Name }}-backend
+                port:
+                  number: {{ .Values.service.backend.port }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Chart.Name }}-frontend
+                port:
+                  number: {{ .Values.service.frontend.port }}

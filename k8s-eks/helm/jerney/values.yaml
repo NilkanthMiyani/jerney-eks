@@ -1,0 +1,74 @@
+# ==============================================================
+# Jerney Helm Values — EKS
+#
+# Differences from GKE/AKS values.yaml:
+#   postgresql.primary.persistence.storageClass:
+#     GKE: standard-rwo (GCP Persistent Disk)
+#     AKS: managed-csi (Azure Managed Disk)
+#     EKS: gp3 (AWS EBS gp3)
+#   ingress: ALB annotations instead of NGINX
+#     - certificateArn: ACM wildcard cert ARN
+#     - groupName: shared ALB across all Ingresses
+#   otel: SigNoz not included (disabled)
+# ==============================================================
+
+hpa:
+  frontend:
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPU: 50
+  backend:
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPU: 50
+
+image:
+  backend:
+    repository: docker.io/nmiyani/jerney-backend
+    tag: 8175f40
+  frontend:
+    repository: docker.io/nmiyani/jerney-frontend
+    tag: 8175f40
+
+postgresql:
+  enabled: true
+  image:
+    tag: "latest"  # bitnami removed version tags from Docker Hub; only latest is publicly available
+  auth:
+    username: jerney_user
+    database: jerney_db
+    existingSecret: jerney-db-credentials  # managed by ESO → AWS Secrets Manager
+    secretKeys:
+      adminPasswordKey: password
+      userPasswordKey: password
+  primary:
+    persistence:
+      size: 10Gi
+      # EKS: gp3 = AWS EBS gp3 (ReadWriteOnce, cheaper and faster than gp2)
+      # GKE equivalent: standard-rwo
+      # AKS equivalent: managed-csi
+      storageClass: "gp3"
+
+service:
+  frontend:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+    annotations: {}
+  backend:
+    type: ClusterIP
+    port: 5000
+    targetPort: 5000
+    annotations: {}
+  db:
+    type: ClusterIP
+    port: 5432
+    targetPort: 5432
+
+ingress:
+  # Hostname for the ALB Ingress
+  host: jerney.nilkanthprojects.site
+  # ACM wildcard certificate ARN — replace after `terraform output acm_cert_arn`
+  certificateArn: "arn:aws:acm:ap-south-1:310318659882:certificate/9144a150-f7ed-4286-8e3d-18e81950e4ee"
+  # ALB group name — all Ingresses with same group share one ALB
+  groupName: jerney-platform

@@ -1,0 +1,187 @@
+# ==============================================================
+# Namespaces + ResourceQuotas + LimitRanges — EKS
+#
+# Adapted from AKS governance/resource-quotas.yaml.
+# Changes for EKS:
+#   - ingress-nginx namespace removed (ALB controller runs in kube-system)
+#   - Added aws-lb-controller quota in kube-system context note
+#   - Adjusted comments for EKS instance types
+#
+# Cluster: 2× t3.medium (2 vCPU, 4 GB) = 4 vCPU / 8 GB
+# Usable after system overhead (~20%): ~3.2 vCPU / ~6.4 GB
+# Observability stack: Prometheus + Loki + Grafana + Alertmanager (monitoring ns)
+# ==============================================================
+
+# ================================================================
+# jerney
+# ================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jerney
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: jerney-quota
+  namespace: jerney
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 2Gi
+    limits.cpu: "2"
+    limits.memory: 4Gi
+    pods: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: jerney-limits
+  namespace: jerney
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 100m
+        memory: 128Mi
+      default:
+        cpu: 500m
+        memory: 512Mi
+      max:
+        cpu: "1"
+        memory: 2Gi
+
+---
+# ================================================================
+# monitoring (kube-prometheus-stack)
+#
+# Prometheus alone requests ~512Mi; with Grafana, Alertmanager,
+# node-exporter×2, kube-state-metrics the stack totals ~1.4 Gi
+# requests. LimitRange defaults apply to pods without explicit limits.
+# Keep limits quota generous (10Gi) to avoid blocking chart upgrades.
+#
+# Note: t3.medium has only 4 GB RAM per node, so this assumes
+# monitoring pods are spread across both nodes.
+# ================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: monitoring-quota
+  namespace: monitoring
+spec:
+  hard:
+    requests.cpu: "1500m"
+    requests.memory: 4Gi
+    limits.cpu: "3"
+    limits.memory: 10Gi
+    pods: "40"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: monitoring-limits
+  namespace: monitoring
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        cpu: 200m
+        memory: 256Mi
+      max:
+        cpu: "2"
+        memory: 4Gi
+
+---
+# ================================================================
+# argocd
+# ================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: argocd-quota
+  namespace: argocd
+spec:
+  hard:
+    requests.cpu: "500m"
+    requests.memory: 1Gi
+    limits.cpu: "1"
+    limits.memory: 2Gi
+    pods: "20"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: argocd-limits
+  namespace: argocd
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 50m
+        memory: 64Mi
+      default:
+        cpu: 200m
+        memory: 256Mi
+      max:
+        cpu: "1"
+        memory: 1Gi
+
+---
+# ================================================================
+# cert-manager
+# Not installed on EKS (ACM handles TLS), but namespace may be
+# referenced by ArgoCD destination. Kept minimal.
+# ================================================================
+
+---
+# ================================================================
+# external-secrets
+# ================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: external-secrets-quota
+  namespace: external-secrets
+spec:
+  hard:
+    requests.cpu: "100m"
+    requests.memory: 256Mi
+    limits.cpu: "200m"
+    limits.memory: 512Mi
+    pods: "10"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: external-secrets-limits
+  namespace: external-secrets
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        cpu: 25m
+        memory: 32Mi
+      default:
+        cpu: 100m
+        memory: 128Mi
+      max:
+        cpu: "200m"
+        memory: 512Mi
