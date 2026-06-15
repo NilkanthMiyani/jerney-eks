@@ -85,13 +85,9 @@ resource "aws_iam_role_policy" "eso_secrets_read" {
 # IRSA: AWS Load Balancer Controller
 # ==============================================================
 
-data "http" "alb_controller_policy" {
-  url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/${var.alb_controller_policy_version}/docs/install/iam_policy.json"
-}
-
 resource "aws_iam_policy" "alb_controller" {
   name   = "${var.cluster_name}-alb-controller-policy"
-  policy = data.http.alb_controller_policy.response_body
+  policy = file("${path.module}/policies/alb-controller.json")
   tags   = var.tags
 }
 
