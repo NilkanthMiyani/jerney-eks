@@ -1,15 +1,6 @@
 # ==============================================================
 # Bootstrap — creates the S3 bucket and DynamoDB table used as
 # the Terraform remote backend for infra/terraform-eks.
-#
-# Uses local state intentionally — this module is the
-# prerequisite that makes remote state possible.
-# Run once before working in terraform-eks:
-#   terraform init && terraform apply
-#
-# AWS equivalent of:
-#   GKE:  google_storage_bucket (GCS)
-#   AKS:  azurerm_storage_account + azurerm_storage_container (Blob)
 # ==============================================================
 
 terraform {

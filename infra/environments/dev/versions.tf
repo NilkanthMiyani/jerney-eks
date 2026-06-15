@@ -31,7 +31,7 @@ terraform {
 
   # Fill in bucket from `terraform output state_bucket_name` in infra/bootstrap/.
   backend "s3" {
-    bucket       = "jerney-tfstate-uxprho" # e.g. jerney-tfstate-abc123
+    bucket       = "jerney-tfstate-j0oqyi" # e.g. jerney-tfstate-abc123
     key          = "jerney-eks/dev/terraform.tfstate"
     region       = "ap-south-1"
     use_lockfile = true # native S3 state locking (.tflock), replaces DynamoDB
