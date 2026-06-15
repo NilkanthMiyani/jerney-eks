@@ -3,7 +3,7 @@
 #
 # In-cluster bootstrap, applied by Terraform via the helm + kubectl
 # providers (configured in the composition and inherited here):
-#   1. gp3 StorageClass (default) + demote gp2
+#   1. gp3 StorageClass (default) 
 #   2. ArgoCD          (Helm)
 #   3. ESO             (Helm — installed by TF so its CRDs exist
 #                       before the ClusterSecretStore below)
