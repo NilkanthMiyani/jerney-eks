@@ -35,21 +35,28 @@ jerney-eks/
 │   │   ├── eks-cluster/              # EKS cluster + Managed Node Groups + OIDC
 │   │   ├── irsa/                     # IAM Roles for Service Accounts (ALB Controller, ESO, EBS CSI)
 │   │   ├── secrets-manager/          # AWS Secrets Manager secrets
-│   │   └── eks-bootstrap/            # In-cluster bootstrap (ArgoCD, ALB Controller, ESO, gp3 StorageClass, root app)
-│   └── environments/                 # Step 2: Compositions — one per env, separate state
-│       ├── dev/                      # main.tf wires modules; versions.tf pins S3 backend
-│       ├── staging/                  # Prod-like hardening at reduced scale
-│       └── prod/                     # Production configuration
+│   │   └── eks-bootstrap/            # In-cluster bootstrap (ArgoCD, ALB Controller, ESO, gp3 StorageClass)
+│   └── live/                         # Step 2: The Single Composition
+│       ├── main.tf                   # Wires all modules together (ONE copy)
+│       ├── variables.tf              # Every knob, no env-specific defaults
+│       ├── outputs.tf                # All outputs
+│       ├── versions.tf               # Providers + partial backend (no state key)
+│       ├── providers.tf              # aws, helm, kubernetes provider configs
+│       ├── tf.sh                     # Wrapper script (prevents env state mixups)
+│       │
+│       ├── dev.tfvars                # Dev knobs: SPOT, t3.medium, tracks 'main' branch
+│       ├── staging.tfvars            # Staging knobs: SPOT, t3.medium, tracks 'staging' branch
+│       └── prod.tfvars               # Prod knobs: ON_DEMAND, t3.large, tracks 'prod' branch
 └── k8s-eks/
     ├── apps/                         # ArgoCD Application CRs (App-of-Apps)
     │   ├── platform-config.yaml      # wave 0 — namespaces + resource quotas
-    │   ├── platform-secrets.yaml     # wave 1
+    │   ├── platform-secrets.yaml     # wave 0 — ExternalSecret CRs
     │   ├── prometheus-stack.yaml     # wave 1
     │   ├── jerney.yaml               # wave 1
     │   ├── loki-stack.yaml           # wave 2
     │   └── ingress-apps.yaml         # wave 2 — Ingress resources
-    │   # Note: the root app, ALB Controller, and ESO are installed by
-    │   #       Terraform (eks-bootstrap), not as ArgoCD Applications.
+    │   # Note: The root app, ALB Controller, and ESO are installed by
+    │   #       Terraform (eks-bootstrap) using official HashiCorp providers.
     ├── helm/jerney/                  # Jerney application Helm chart
     │   ├── Chart.yaml
     │   ├── values.yaml
@@ -62,7 +69,7 @@ jerney-eks/
         └── loki-stack/               # Helm values
 ```
 
-> The Terraform code is **modular**: `modules/` holds reusable resources with no environment-specific hardcoding. Each `environments/<env>` composition wires them together with its own `terraform.tfvars` and its own remote state key in S3. A mistake in dev can never affect prod state.
+> The Terraform code uses a **"Single Composition"** pattern. `modules/` holds reusable resources. `live/main.tf` defines the cluster structure once. The exact environment (`dev`, `staging`, `prod`) is determined entirely by the `.tfvars` file and isolated in its own remote S3 state via the `tf.sh` wrapper script. A mistake in dev can never affect prod state.
 
 ---
 
@@ -72,7 +79,7 @@ jerney-eks/
 
 **Traffic Flow:** Internet → Application Load Balancer (managed by AWS LB Controller) → NodePorts → Pods. TLS is terminated at the ALB using certificates from AWS Certificate Manager (ACM).
 
-**Deployment Flow:** `git push` → ArgoCD detects diff → syncs in wave order (0 → 1 → 2).
+**Deployment Flow:** `git push` → ArgoCD detects diff on the environment's tracking branch → syncs in wave order (0 → 1 → 2).
 
 ---
 
@@ -99,28 +106,44 @@ terraform init
 terraform apply
 ```
 
-Note the `state_bucket_name` output — you'll need it in Step 2. State locking is handled natively by Terraform via S3 (`use_lockfile = true`), so no DynamoDB table is required.
+Note the `state_bucket_name` output. State locking is handled natively by Terraform via S3 (`use_lockfile = true`), so no DynamoDB table is required. Ensure `infra/live/versions.tf` uses this bucket name in the `backend "s3"` block.
 
 ---
 
 ### Step 2 — Deploy an environment
 
-Pick the environment you want to deploy (`dev`, `staging`, or `prod`):
+Navigate to the unified composition directory:
 
 ```bash
-cd infra/environments/dev/
+cd infra/live/
 ```
 
-Edit `versions.tf` and update the `bucket` field in the backend block to the S3 bucket name created in Step 1.
-
-Configure your environment-specific non-secret variables in `terraform.tfvars`. Pass your secrets dynamically at apply time:
+We use a wrapper script (`tf.sh`) that dynamically initializes the correct S3 backend state key to prevent deploying `dev` code into `prod` state. Pass your environment (`dev`, `staging`, or `prod`) and your Terraform command:
 
 ```bash
-terraform init
-terraform apply \
-  -var="postgres_password=your-postgres-password" \
-  -var="grafana_admin_password=your-grafana-password" \
-  -var="alertmanager_smtp_key=your-smtp-key"
+# Pass secrets dynamically via environment variables so they aren't tracked in git
+export TF_VAR_postgres_password="your-postgres-password"
+export TF_VAR_grafana_admin_password="your-grafana-password"
+export TF_VAR_alertmanager_smtp_key="your-smtp-key"
+
+# Plan the infrastructure
+./tf.sh dev plan
+
+# Apply the infrastructure
+./tf.sh dev apply
+```
+
+*(Alternatively, you can run the Terraform commands manually without the wrapper script by explicitly passing the backend config and variable file):*
+
+```bash
+# Initialize the state (must specify the key and -reconfigure)
+terraform init -backend-config="key=jerney-eks/dev/terraform.tfstate" -reconfigure
+
+# Plan
+terraform plan -var-file="dev.tfvars"
+
+# Apply
+terraform apply -var-file="dev.tfvars"
 ```
 
 This provisions the VPC, EKS cluster, Managed Node Groups, IAM Roles, Secrets Manager, and bootstraps ArgoCD via the Helm provider. It takes ~15 minutes.
@@ -184,7 +207,7 @@ kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.pas
 
 ### Update application image
 
-Edit `k8s-eks/helm/jerney/values.yaml`, change the `image.backend.tag` or `image.frontend.tag`, and push to GitHub. ArgoCD will detect the change and perform a rolling update automatically.
+Edit `k8s-eks/helm/jerney/values.yaml` on your target branch, change the `image.backend.tag` or `image.frontend.tag`, and push to GitHub. ArgoCD will detect the change and perform a rolling update automatically.
 
 ### Rotate a secret
 
@@ -214,13 +237,13 @@ kubectl annotate externalsecret jerney-db-credentials \
    kubectl delete app ingress-apps -n argocd
    # Wait a minute or two for the ALB to be fully de-provisioned in AWS
    ```
-2. Destroy the Terraform environment:
+2. Destroy the Terraform environment using the wrapper script:
    ```bash
-   cd infra/environments/dev
-   terraform destroy
+   cd infra/live/
+   ./tf.sh dev destroy
    ```
 3. Destroy the bootstrap infrastructure (only after all environments are gone):
    ```bash
-   cd ../../bootstrap
+   cd ../bootstrap/
    terraform destroy
    ```

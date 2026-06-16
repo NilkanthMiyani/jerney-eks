@@ -34,8 +34,8 @@ resource "kubernetes_storage_class_v1" "gp3" {
     type   = "gp3"
     fsType = "ext4"
   }
-  reclaim_policy      = "Delete"
-  volume_binding_mode = "WaitForFirstConsumer"
+  reclaim_policy         = "Delete"
+  volume_binding_mode    = "WaitForFirstConsumer"
   allow_volume_expansion = true
 }
 
@@ -88,11 +88,12 @@ resource "helm_release" "argocd_apps" {
   namespace        = "argocd"
   create_namespace = false
 
+  # argocd-apps chart v2.x expects `applications` as a map keyed by app name,
+  # not a list (a list makes the index `0` the metadata.name -> unmarshal error).
   values = [
     yamlencode({
-      applications = [
-        {
-          name      = "platform"
+      applications = {
+        platform = {
           namespace = "argocd"
           finalizers = [
             "resources-finalizer.argocd.argoproj.io"
@@ -114,7 +115,7 @@ resource "helm_release" "argocd_apps" {
             }
           }
         }
-      ]
+      }
     })
   ]
 
@@ -137,35 +138,13 @@ resource "helm_release" "external_secrets" {
     value = var.eso_role_arn
   }
 
-  # Ensure the CRDs are installed, then create the ClusterSecretStore via extraObjects
+  # Only the ESO operator + CRDs are installed here. The ClusterSecretStore
+  # (a custom resource) lives in gitops (k8s-eks/platform/external-secrets) and
+  # is reconciled by the `platform-secrets` ArgoCD app *after* these CRDs exist
+  # -- a CR cannot live in the same Helm release as the CRD that defines it.
   values = [
     yamlencode({
       installCRDs = true
-      extraObjects = [
-        {
-          apiVersion = "external-secrets.io/v1beta1"
-          kind       = "ClusterSecretStore"
-          metadata = {
-            name = "aws-secrets-manager"
-          }
-          spec = {
-            provider = {
-              aws = {
-                service = "SecretsManager"
-                region  = var.aws_region
-                auth = {
-                  jwt = {
-                    serviceAccountRef = {
-                      name      = "external-secrets"
-                      namespace = "external-secrets"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      ]
     })
   ]
 }
