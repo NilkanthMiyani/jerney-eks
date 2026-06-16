@@ -106,6 +106,54 @@ resource "helm_release" "external_secrets" {
   }
 }
 
+# ---- 2b. AWS Load Balancer Controller ----
+# Terraform-owned (previously an ArgoCD Application at sync-wave 0). With
+# wait = true the controller is fully rolled out before the root App-of-Apps
+# is created below, so ArgoCD-managed Ingresses never sync ahead of it.
+resource "helm_release" "aws_lb_controller" {
+  name             = "aws-load-balancer-controller"
+  repository       = "https://aws.github.io/eks-charts"
+  chart            = "aws-load-balancer-controller"
+  version          = var.alb_controller_chart_version
+  namespace        = "kube-system"
+  create_namespace = false
+  wait             = true
+  timeout          = 300
+
+  set {
+    name  = "clusterName"
+    value = var.cluster_name
+  }
+
+  set {
+    name  = "region"
+    value = var.aws_region
+  }
+
+  set {
+    name  = "vpcId"
+    value = var.vpc_id
+  }
+
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "aws-load-balancer-controller"
+  }
+
+  # IRSA: annotate the controller ServiceAccount with its IAM role ARN.
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = var.alb_controller_role_arn
+  }
+
+  depends_on = [helm_release.argocd]
+}
+
 # ---- 3. ESO ClusterSecretStore (AWS Secrets Manager) ----
 resource "kubectl_manifest" "eso_cluster_secret_store" {
   yaml_body = <<-YAML
@@ -153,5 +201,7 @@ resource "kubectl_manifest" "argocd_root_app" {
           selfHeal: true
   YAML
 
-  depends_on = [helm_release.argocd]
+  # Wait for both ArgoCD and the ALB controller: the controller must be
+  # running before ArgoCD starts syncing platform Ingresses.
+  depends_on = [helm_release.argocd, helm_release.aws_lb_controller]
 }

@@ -129,11 +129,14 @@ provider "kubectl" {
 module "eks_bootstrap" {
   source = "../../modules/eks-bootstrap"
 
-  eso_role_arn           = module.irsa.eso_role_arn
-  aws_region             = var.aws_region
-  gitops_repo_url        = var.gitops_repo_url
-  gitops_target_revision = var.gitops_target_revision
-  gitops_apps_path       = var.gitops_apps_path
+  eso_role_arn            = module.irsa.eso_role_arn
+  aws_region              = var.aws_region
+  gitops_repo_url         = var.gitops_repo_url
+  gitops_target_revision  = var.gitops_target_revision
+  gitops_apps_path        = var.gitops_apps_path
+  cluster_name            = module.eks_cluster.cluster_name
+  vpc_id                  = module.networking.vpc_id
+  alb_controller_role_arn = module.irsa.alb_controller_role_arn
 
   # ESO CRDs/SecretStore reference secrets that must already exist,
   # and bootstrap needs the EBS CSI addon (irsa) for gp3 volumes.

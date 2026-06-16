@@ -1,6 +1,6 @@
 # Jerney — EKS
 
-Production-style Amazon Elastic Kubernetes Service (EKS) deployment of the Jerney application. Built as a counterpart to the GKE and AKS implementations for hands-on AWS learning.
+Production-style Amazon Elastic Kubernetes Service (EKS) deployment of the Jerney application.
 
 ![Architecture](docs/architecture.svg)
 
@@ -35,22 +35,21 @@ jerney-eks/
 │   │   ├── eks-cluster/              # EKS cluster + Managed Node Groups + OIDC
 │   │   ├── irsa/                     # IAM Roles for Service Accounts (ALB Controller, ESO, EBS CSI)
 │   │   ├── secrets-manager/          # AWS Secrets Manager secrets
-│   │   └── eks-bootstrap/            # In-cluster bootstrap (ArgoCD, gp3 StorageClass)
+│   │   └── eks-bootstrap/            # In-cluster bootstrap (ArgoCD, ALB Controller, ESO, gp3 StorageClass, root app)
 │   └── environments/                 # Step 2: Compositions — one per env, separate state
 │       ├── dev/                      # main.tf wires modules; versions.tf pins S3 backend
 │       ├── staging/                  # Prod-like hardening at reduced scale
 │       └── prod/                     # Production configuration
 └── k8s-eks/
     ├── apps/                         # ArgoCD Application CRs (App-of-Apps)
-    │   ├── root-app.yaml             # Seeded by Terraform
-    │   ├── aws-lb-controller.yaml    # wave 0
-    │   ├── external-secrets.yaml     # wave 0
     │   ├── platform-config.yaml      # wave 0 — namespaces + resource quotas
     │   ├── platform-secrets.yaml     # wave 1
     │   ├── prometheus-stack.yaml     # wave 1
     │   ├── jerney.yaml               # wave 1
     │   ├── loki-stack.yaml           # wave 2
     │   └── ingress-apps.yaml         # wave 2 — Ingress resources
+    │   # Note: the root app, ALB Controller, and ESO are installed by
+    │   #       Terraform (eks-bootstrap), not as ArgoCD Applications.
     ├── helm/jerney/                  # Jerney application Helm chart
     │   ├── Chart.yaml
     │   ├── values.yaml

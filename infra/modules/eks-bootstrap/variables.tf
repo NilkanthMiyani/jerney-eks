@@ -43,3 +43,28 @@ variable "gitops_apps_path" {
   default     = "k8s-eks/apps"
   nullable    = false
 }
+
+variable "alb_controller_chart_version" {
+  description = "aws-load-balancer-controller Helm chart version"
+  type        = string
+  default     = "1.11.0"
+  nullable    = false
+}
+
+variable "cluster_name" {
+  description = "Name of the EKS cluster (used by ALB controller)"
+  type        = string
+  nullable    = false
+}
+
+variable "vpc_id" {
+  description = "VPC ID where the cluster is deployed (used by ALB controller)"
+  type        = string
+  nullable    = false
+}
+
+variable "alb_controller_role_arn" {
+  description = "IRSA role ARN for the AWS Load Balancer Controller"
+  type        = string
+  nullable    = false
+}

@@ -15,7 +15,7 @@ infra/
 │   ├── eks-cluster/          # EKS cluster, OIDC provider, node group, core addons, ACM lookup
 │   ├── irsa/                 # ESO / ALB Controller / EBS CSI IRSA roles + EBS CSI addon
 │   ├── secrets-manager/      # Secrets Manager secrets (for_each over a map)
-│   └── eks-bootstrap/        # ArgoCD, ESO, ClusterSecretStore, gp3 StorageClass, root app
+│   └── eks-bootstrap/        # ArgoCD, ALB Controller, ESO, ClusterSecretStore, gp3 StorageClass, root app
 └── environments/             # One composition per environment, separate state
     ├── dev/
     ├── staging/

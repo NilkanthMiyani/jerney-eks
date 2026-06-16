@@ -26,4 +26,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true  # required: kube-prometheus-stack CRDs exceed 262KB annotation limit
+      - ServerSideApply=true
