@@ -21,7 +21,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "jerney-tfstate-j0oqyi"
+    bucket       = "jerney-tfstate-c8xo2u"
     region       = "ap-south-1"
     use_lockfile = true
     encrypt      = true

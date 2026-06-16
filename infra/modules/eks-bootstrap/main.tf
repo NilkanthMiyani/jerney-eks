@@ -3,9 +3,10 @@
 #
 # In-cluster bootstrap, applied by Terraform via the helm and
 # kubernetes providers:
-#   1. gp3 StorageClass (default) 
-#   2. ArgoCD          (Helm + Root App in values)
-#   3. ESO             (Helm + ClusterSecretStore in values)
+#   1. gp3 StorageClass (default)
+#   2. ArgoCD          (Helm + Root App-of-Apps)
+#   3. ESO             (Helm + CRDs; ClusterSecretStore lives in gitops)
+#   4. AWS Load Balancer Controller (Helm)
 # ==============================================================
 
 terraform {
@@ -40,20 +41,18 @@ resource "kubernetes_storage_class_v1" "gp3" {
 }
 
 # Demote the built-in gp2 StorageClass so gp3 is the sole default.
-resource "kubernetes_storage_class_v1" "gp2_not_default" {
+# EKS ships gp2 on every cluster, so we patch the existing object's annotation
+# instead of creating it (which collides with "gp2 already exists").
+resource "kubernetes_annotations" "gp2_not_default" {
+  api_version = "storage.k8s.io/v1"
+  kind        = "StorageClass"
   metadata {
     name = "gp2"
-    annotations = {
-      "storageclass.kubernetes.io/is-default-class" = "false"
-    }
   }
-  storage_provisioner = "kubernetes.io/aws-ebs"
-  parameters = {
-    type   = "gp2"
-    fsType = "ext4"
+  annotations = {
+    "storageclass.kubernetes.io/is-default-class" = "false"
   }
-  reclaim_policy      = "Delete"
-  volume_binding_mode = "WaitForFirstConsumer"
+  force = true
 }
 
 # ---- 1. ArgoCD + Root App ----
@@ -122,7 +121,7 @@ resource "helm_release" "argocd_apps" {
   depends_on = [helm_release.argocd]
 }
 
-# ---- 2. ESO + ClusterSecretStore ----
+# ---- 2. ESO (operator + CRDs only; ClusterSecretStore is in gitops) ----
 resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"

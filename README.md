@@ -203,7 +203,7 @@ kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.pas
 
 ---
 
-## Day-2 Operations
+## Operations
 
 ### Update application image
 
@@ -228,22 +228,52 @@ kubectl annotate externalsecret jerney-db-credentials \
 
 ### ⚠️ Destroy everything (Important)
 
-> **WARNING:** The AWS Load Balancer Controller provisions an ALB *outside* of Terraform. If you run `terraform destroy` while the ALB still exists, AWS will prevent Terraform from destroying the Internet Gateway, causing Terraform to hang indefinitely.
+> **WARNING:** The AWS Load Balancer Controller provisions ALBs and security groups (`k8s-traffic-*`, `k8s-<group>-*`) *outside* of Terraform. If you `terraform destroy` while they still exist, their ENIs/SGs block deletion of the Internet Gateway, subnets, and VPC — Terraform hangs for 10–15 min on `aws_internet_gateway` or `aws_vpc`.
 
-**Before running `terraform destroy`, you MUST clean up the ALB:**
+**Step 1 — Remove the load balancers while the cluster is still healthy.**
+Deleting just the Ingress objects does **not** work — ArgoCD `selfHeal` recreates them within seconds. You must delete the ArgoCD **Applications** so nothing recreates them:
+```bash
+aws eks update-kubeconfig --name jerney-eks-dev --region ap-south-1 --profile nilkanthaws9
 
-1. Delete the ArgoCD ingress apps (this tells the ALB controller to delete the ALB):
-   ```bash
-   kubectl delete app ingress-apps -n argocd
-   # Wait a minute or two for the ALB to be fully de-provisioned in AWS
-   ```
-2. Destroy the Terraform environment using the wrapper script:
-   ```bash
-   cd infra/live/
-   ./tf.sh dev destroy
-   ```
-3. Destroy the bootstrap infrastructure (only after all environments are gone):
-   ```bash
-   cd ../bootstrap/
-   terraform destroy
-   ```
+# Finalizers cascade-delete the managed Ingresses; the LB controller then
+# removes the ALBs + their security groups. This also stops selfHeal.
+kubectl delete applications --all -n argocd
+
+# CONFIRM the ALBs are gone before continuing (must print nothing):
+aws elbv2 describe-load-balancers --region ap-south-1 \
+  --query 'LoadBalancers[].LoadBalancerName' --output text --profile nilkanthaws9
+```
+
+**Step 2 — Destroy the environment.**
+```bash
+cd infra/live/
+./tf.sh dev destroy
+```
+
+> **If destroy fails with `Unauthorized` / `Kubernetes cluster unreachable`:** Terraform tears down the cluster access entry before the in-cluster resources, so the `helm`/`kubernetes` providers lose auth mid-destroy. Drop those resources from state (they die with the cluster anyway) and re-run:
+> ```bash
+> terraform state rm \
+>   module.eks_bootstrap.helm_release.argocd \
+>   module.eks_bootstrap.helm_release.argocd_apps \
+>   module.eks_bootstrap.helm_release.aws_lb_controller \
+>   module.eks_bootstrap.helm_release.external_secrets \
+>   module.eks_bootstrap.kubernetes_storage_class_v1.gp3
+> ./tf.sh dev destroy
+> ```
+
+**Step 3 — Destroy the bootstrap infra** (only after all environments are gone):
+```bash
+cd ../bootstrap/
+terraform destroy
+```
+
+**Step 4 — Orphan sweep.** EBS volumes (from PVCs) and any leaked ALB security groups outlive the cluster. Verify nothing is left billing:
+```bash
+export AWS_PROFILE=nilkanthaws9; R=ap-south-1
+aws elbv2 describe-load-balancers --region $R --query 'LoadBalancers[].LoadBalancerName' --output text
+aws ec2 describe-security-groups --region $R --filters Name=group-name,Values=k8s-* --query 'SecurityGroups[].GroupId' --output text
+aws ec2 describe-volumes --region $R --filters Name=status,Values=available --query 'Volumes[].VolumeId' --output text
+aws ec2 describe-nat-gateways --region $R --filter Name=state,Values=available --query 'NatGateways[].NatGatewayId' --output text
+aws ec2 describe-vpcs --region $R --query 'Vpcs[?Tags[?Key==`Name` && contains(Value,`jerney`)]].VpcId' --output text
+```
+Delete anything these list — `aws ec2 delete-volume`, `delete-security-group`, etc. (Unattached EBS volumes bill ~$0.10/GB/mo; NAT gateways bill hourly.)
