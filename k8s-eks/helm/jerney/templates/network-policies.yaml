@@ -57,7 +57,7 @@ spec:
     # (On GKE/AKS with NGINX Ingress, this was namespaceSelector: ingress-nginx)
     - from:
         - ipBlock:
-            cidr: 10.0.0.0/16
+            cidr: {{ .Values.networkPolicy.vpcCidr }}
       ports:
         - port: 5000
           protocol: TCP

@@ -1,10 +1,9 @@
 # ==============================================================
-# Environment composition: DEV
+# Single Composition: jerney-eks
 #
-# Wires the resource modules into a single cluster with its own
-# state file. All environment-specific values come from variables
-# (see variables.tf defaults and terraform.tfvars), so this file is
-# identical across dev/staging/prod.
+# Wires the resource modules into a single cluster.
+# All environment-specific values come from variables
+# (see variables.tf and the respective .tfvars files).
 #
 # Dependency graph:
 #   networking ──┐
@@ -12,11 +11,6 @@
 #                ├── eks_cluster ── irsa ── eks_bootstrap
 #   secrets_manager ───────────────────────/
 # ==============================================================
-
-provider "aws" {
-  region  = var.aws_region
-  profile = var.aws_profile
-}
 
 data "aws_availability_zones" "available" {
   state = "available"
@@ -31,7 +25,7 @@ locals {
 }
 
 module "networking" {
-  source = "../../modules/networking"
+  source = "../modules/networking"
 
   cluster_name         = var.cluster_name
   vpc_cidr             = var.vpc_cidr
@@ -42,14 +36,14 @@ module "networking" {
 }
 
 module "iam" {
-  source = "../../modules/iam"
+  source = "../modules/iam"
 
   cluster_name = var.cluster_name
   tags         = local.common_tags
 }
 
 module "eks_cluster" {
-  source = "../../modules/eks-cluster"
+  source = "../modules/eks-cluster"
 
   cluster_name       = var.cluster_name
   kubernetes_version = var.kubernetes_version
@@ -73,7 +67,7 @@ module "eks_cluster" {
 }
 
 module "irsa" {
-  source = "../../modules/irsa"
+  source = "../modules/irsa"
 
   cluster_name      = var.cluster_name
   oidc_provider     = module.eks_cluster.oidc_provider
@@ -82,7 +76,7 @@ module "irsa" {
 }
 
 module "secrets_manager" {
-  source = "../../modules/secrets-manager"
+  source = "../modules/secrets-manager"
 
   secrets = {
     "jerney-postgres-password"      = var.postgres_password
@@ -93,37 +87,8 @@ module "secrets_manager" {
   tags                    = local.common_tags
 }
 
-provider "helm" {
-  kubernetes {
-    host                   = module.eks_cluster.cluster_endpoint
-    cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", module.eks_cluster.cluster_name, "--region", var.aws_region, "--profile", var.aws_profile]
-      env = {
-        AWS_PROFILE = var.aws_profile
-      }
-    }
-  }
-}
-
-provider "kubectl" {
-  host                   = module.eks_cluster.cluster_endpoint
-  cluster_ca_certificate = base64decode(module.eks_cluster.cluster_ca_certificate)
-  load_config_file       = false
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", module.eks_cluster.cluster_name, "--region", var.aws_region, "--profile", var.aws_profile]
-    env = {
-      AWS_PROFILE = var.aws_profile
-    }
-  }
-}
-
 module "eks_bootstrap" {
-  source = "../../modules/eks-bootstrap"
+  source = "../modules/eks-bootstrap"
 
   eso_role_arn            = module.irsa.eso_role_arn
   aws_region              = var.aws_region
@@ -134,7 +99,5 @@ module "eks_bootstrap" {
   vpc_id                  = module.networking.vpc_id
   alb_controller_role_arn = module.irsa.alb_controller_role_arn
 
-  # ESO CRDs/SecretStore reference secrets that must already exist,
-  # and bootstrap needs the EBS CSI addon (irsa) for gp3 volumes.
   depends_on = [module.irsa, module.secrets_manager]
 }

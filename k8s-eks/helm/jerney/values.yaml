@@ -72,3 +72,8 @@ ingress:
   certificateArn: "arn:aws:acm:ap-south-1:310318659882:certificate/9144a150-f7ed-4286-8e3d-18e81950e4ee"
   # ALB group name — all Ingresses with same group share one ALB
   groupName: jerney-platform
+
+networkPolicy:
+  # Used to allow ALB traffic to pod IPs directly.
+  # Must match the VPC CIDR of the environment.
+  vpcCidr: "10.0.0.0/16"
