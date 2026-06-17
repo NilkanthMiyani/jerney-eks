@@ -36,17 +36,15 @@ jerney-eks/
 │   │   ├── irsa/                     # IAM Roles for Service Accounts (ALB Controller, ESO, EBS CSI)
 │   │   ├── secrets-manager/          # AWS Secrets Manager secrets
 │   │   └── eks-bootstrap/            # In-cluster bootstrap (ArgoCD, ALB Controller, ESO, gp3 StorageClass)
-│   └── live/                         # Step 2: The Single Composition
-│       ├── main.tf                   # Wires all modules together (ONE copy)
-│       ├── variables.tf              # Every knob, no env-specific defaults
-│       ├── outputs.tf                # All outputs
-│       ├── versions.tf               # Providers + partial backend (no state key)
-│       ├── providers.tf              # aws, helm, kubernetes provider configs
-│       ├── tf.sh                     # Wrapper script (prevents env state mixups)
-│       │
-│       ├── dev.tfvars                # Dev knobs: SPOT, t3.medium, tracks 'main' branch
-│       ├── staging.tfvars            # Staging knobs: SPOT, t3.medium, tracks 'staging' branch
-│       └── prod.tfvars               # Prod knobs: ON_DEMAND, t3.large, tracks 'prod' branch
+│   ├── main.tf                       # Wires all modules together (ONE copy)
+│   ├── variables.tf                  # Every knob, no env-specific defaults
+│   ├── outputs.tf                    # All outputs
+│   ├── versions.tf                   # Providers + partial backend (no state key)
+│   ├── providers.tf                  # aws, helm, kubernetes provider configs
+│   │
+│   ├── dev.tfvars.example            # Dev knobs template
+│   ├── staging.tfvars.example        # Staging knobs template
+│   └── prod.tfvars.example           # Prod knobs template
 └── k8s-eks/
     ├── apps/                         # ArgoCD Application CRs (App-of-Apps)
     │   ├── platform-config.yaml      # wave 0 — namespaces + resource quotas
@@ -69,7 +67,7 @@ jerney-eks/
         └── loki-stack/               # Helm values
 ```
 
-> The Terraform code uses a **"Single Composition"** pattern. `modules/` holds reusable resources. `live/main.tf` defines the cluster structure once. The exact environment (`dev`, `staging`, `prod`) is determined entirely by the `.tfvars` file and isolated in its own remote S3 state via the `tf.sh` wrapper script. A mistake in dev can never affect prod state.
+> The Terraform code uses a **"Single Composition"** pattern. `modules/` holds reusable resources. `infra/main.tf` defines the cluster structure once. The exact environment (`dev`, `staging`, `prod`) is determined entirely by the `.tfvars` file and isolated in its own remote S3 state via **Terraform Workspaces**. A mistake in dev can never affect prod state.
 
 ---
 
@@ -106,7 +104,7 @@ terraform init
 terraform apply
 ```
 
-Note the `state_bucket_name` output. State locking is handled natively by Terraform via S3 (`use_lockfile = true`), so no DynamoDB table is required. Ensure `infra/live/versions.tf` uses this bucket name in the `backend "s3"` block.
+Note the `state_bucket_name` output. State locking is handled natively by Terraform via S3 (`use_lockfile = true`), so no DynamoDB table is required. Ensure `infra/versions.tf` uses this bucket name in the `backend "s3"` block.
 
 ---
 
@@ -243,7 +241,7 @@ aws elbv2 describe-load-balancers --region ap-south-1 \
 
 **Step 2 — Destroy the environment.**
 ```bash
-cd infra/live/
+cd infra/
 terraform workspace select dev
 terraform destroy -var-file="dev.tfvars"
 ```

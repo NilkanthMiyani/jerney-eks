@@ -1,6 +1,6 @@
 # Jerney EKS — Terraform Infrastructure
 
-Modular Terraform for the Jerney EKS platform. Resource modules are environment-agnostic; the entire infrastructure is wired together in the `live/` directory using the Single Composition pattern.
+Modular Terraform for the Jerney EKS platform. Resource modules are environment-agnostic; the entire infrastructure is wired together in the root `infra/` directory using the Single Composition pattern.
 
 For complete setup, deployment, and operational instructions, **please see the [Root README](../README.md)**.
 
@@ -16,18 +16,18 @@ infra/
 │   ├── irsa/                 # ESO / ALB Controller / EBS CSI IRSA roles + EBS CSI addon
 │   ├── secrets-manager/      # Secrets Manager secrets
 │   └── eks-bootstrap/        # ArgoCD, ALB Controller, ESO, gp3 StorageClass
-└── live/                     # The Single Composition (main.tf wires modules together)
-    ├── dev.tfvars            # Dev environment variables
-    ├── staging.tfvars        # Staging environment variables
-    ├── prod.tfvars           # Prod environment variables
+├── main.tf                   # The Single Composition (wires modules together)
+├── dev.tfvars.example        # Dev environment variables template
+├── staging.tfvars.example    # Staging environment variables template
+└── prod.tfvars.example       # Prod environment variables template
 ```
 
 ## Usage
 
-To apply infrastructure, navigate to the `live/` directory and use **Terraform Workspaces**. This ensures the state is isolated per environment.
+To apply infrastructure, navigate to the `infra/` directory and use **Terraform Workspaces**. This ensures the state is isolated per environment.
 
 ```bash
-cd live/
+cd ./
 
 # 1. Initialize (run once)
 terraform init

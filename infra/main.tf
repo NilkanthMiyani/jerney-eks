@@ -25,7 +25,7 @@ locals {
 }
 
 module "networking" {
-  source = "../modules/networking"
+  source = "./modules/networking"
 
   cluster_name         = var.cluster_name
   vpc_cidr             = var.vpc_cidr
@@ -36,14 +36,14 @@ module "networking" {
 }
 
 module "iam" {
-  source = "../modules/iam"
+  source = "./modules/iam"
 
   cluster_name = var.cluster_name
   tags         = local.common_tags
 }
 
 module "eks_cluster" {
-  source = "../modules/eks-cluster"
+  source = "./modules/eks-cluster"
 
   cluster_name       = var.cluster_name
   kubernetes_version = var.kubernetes_version
@@ -67,7 +67,7 @@ module "eks_cluster" {
 }
 
 module "irsa" {
-  source = "../modules/irsa"
+  source = "./modules/irsa"
 
   cluster_name      = var.cluster_name
   oidc_provider     = module.eks_cluster.oidc_provider
@@ -76,7 +76,7 @@ module "irsa" {
 }
 
 module "secrets_manager" {
-  source = "../modules/secrets-manager"
+  source = "./modules/secrets-manager"
 
   secrets = {
     "jerney-postgres-password"      = var.postgres_password
@@ -88,7 +88,7 @@ module "secrets_manager" {
 }
 
 module "eks_bootstrap" {
-  source = "../modules/eks-bootstrap"
+  source = "./modules/eks-bootstrap"
 
   eso_role_arn            = module.irsa.eso_role_arn
   aws_region              = var.aws_region
