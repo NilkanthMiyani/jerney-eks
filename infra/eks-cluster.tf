@@ -49,9 +49,9 @@ resource "aws_eks_cluster" "main" {
 data "aws_caller_identity" "current" {}
 
 resource "aws_eks_access_entry" "creator" {
-  cluster_name      = aws_eks_cluster.main.name
-  principal_arn     = data.aws_caller_identity.current.arn
-  type              = "STANDARD"
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = data.aws_caller_identity.current.arn
+  type          = "STANDARD"
 }
 
 resource "aws_eks_access_policy_association" "creator" {
