@@ -9,7 +9,6 @@
 #   ingress: ALB annotations instead of NGINX
 #     - certificateArn: ACM wildcard cert ARN
 #     - groupName: shared ALB across all Ingresses
-#   otel: SigNoz not included (disabled)
 # ==============================================================
 
 hpa:
