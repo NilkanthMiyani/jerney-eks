@@ -113,7 +113,7 @@ Note the `state_bucket_name` output. State locking is handled natively by Terraf
 Navigate to the unified composition directory:
 
 ```bash
-cd infra/live/
+cd infra/
 ```
 
 We use **Terraform Workspaces** to strictly isolate the state for each environment (`dev`, `staging`, `prod`) while using the same codebase. 
