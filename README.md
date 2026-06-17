@@ -202,9 +202,9 @@ kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath='{.data.pas
 
 ## Operations
 
-### Update application image
+### GitOps & Environment Promotion
 
-Edit `k8s-eks/helm/jerney/values.yaml` on your target branch, change the `image.backend.tag` or `image.frontend.tag`, and push to GitHub. ArgoCD will detect the change and perform a rolling update automatically.
+For a comprehensive guide on how we use Kustomize overlays and environment-specific Helm value files to promote images across `dev`, `staging`, and `prod` directly from the `main` branch, please read the **[GitOps Runbook](runbook.md)**.
 
 ### Rotate a secret
 
