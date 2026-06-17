@@ -9,18 +9,7 @@
 #   4. AWS Load Balancer Controller (Helm)
 # ==============================================================
 
-terraform {
-  required_providers {
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.16"
-    }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.23"
-    }
-  }
-}
+
 
 # ---- gp3 StorageClass (default) ----
 resource "kubernetes_storage_class_v1" "gp3" {
@@ -73,8 +62,6 @@ resource "helm_release" "argocd_apps" {
   namespace        = "argocd"
   create_namespace = false
 
-  # argocd-apps chart v2.x expects `applications` as a map keyed by app name,
-  # not a list (a list makes the index `0` the metadata.name -> unmarshal error).
   values = [
     yamlencode({
       applications = {

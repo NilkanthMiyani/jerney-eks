@@ -12,14 +12,7 @@
 # module, giving the linear graph: eks-cluster -> irsa -> eks-bootstrap.
 # ==============================================================
 
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
+
 
 locals {
   # Reusable IRSA assume-role policy builder. Given a service account

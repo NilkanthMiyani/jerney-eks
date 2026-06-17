@@ -12,18 +12,7 @@
 # cycle (eks-cluster -> irsa -> eks-cluster).
 # ==============================================================
 
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    tls = {
-      source  = "hashicorp/tls"
-      version = "~> 4.0"
-    }
-  }
-}
+
 
 # ---- ACM Certificate ----
 # The ALB terminates TLS using this existing wildcard cert (no cert-manager).

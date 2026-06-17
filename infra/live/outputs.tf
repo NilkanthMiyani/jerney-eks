@@ -22,3 +22,8 @@ output "private_subnets" {
   description = "Private subnet IDs"
   value       = module.networking.private_subnet_ids
 }
+
+output "kubeconfig_command" {
+  description = "Command to configure kubectl and update your local context"
+  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks_cluster.cluster_name} --profile ${var.aws_profile}"
+}

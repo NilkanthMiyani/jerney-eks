@@ -118,7 +118,7 @@ Navigate to the unified composition directory:
 cd infra/live/
 ```
 
-We use a wrapper script (`tf.sh`) that dynamically initializes the correct S3 backend state key to prevent deploying `dev` code into `prod` state. Pass your environment (`dev`, `staging`, or `prod`) and your Terraform command:
+We use **Terraform Workspaces** to strictly isolate the state for each environment (`dev`, `staging`, `prod`) while using the same codebase. 
 
 ```bash
 # Pass secrets dynamically via environment variables so they aren't tracked in git
@@ -126,26 +126,23 @@ export TF_VAR_postgres_password="your-postgres-password"
 export TF_VAR_grafana_admin_password="your-grafana-password"
 export TF_VAR_alertmanager_smtp_key="your-smtp-key"
 
-# Plan the infrastructure
-./tf.sh dev plan
+# 1. Initialize (run once)
+terraform init
 
-# Apply the infrastructure
-./tf.sh dev apply
-```
+# 2. Fresh Setup: Create the workspaces for the first time
+terraform workspace new dev
+terraform workspace new staging
+terraform workspace new prod
 
-*(Alternatively, you can run the Terraform commands manually without the wrapper script by explicitly passing the backend config and variable file):*
+# 3. Switch to the target workspace (e.g. dev)
+terraform workspace select dev
 
-```bash
-# Initialize the state (must specify the key and -reconfigure)
-terraform init -backend-config="key=jerney-eks/dev/terraform.tfstate" -reconfigure
-
-# Plan
+# 4. Plan using the environment's variables
 terraform plan -var-file="dev.tfvars"
 
-# Apply
+# 5. Apply
 terraform apply -var-file="dev.tfvars"
 ```
-
 This provisions the VPC, EKS cluster, Managed Node Groups, IAM Roles, Secrets Manager, and bootstraps ArgoCD via the Helm provider. It takes ~15 minutes.
 
 ---
@@ -247,7 +244,8 @@ aws elbv2 describe-load-balancers --region ap-south-1 \
 **Step 2 — Destroy the environment.**
 ```bash
 cd infra/live/
-./tf.sh dev destroy
+terraform workspace select dev
+terraform destroy -var-file="dev.tfvars"
 ```
 
 > **If destroy fails with `Unauthorized` / `Kubernetes cluster unreachable`:** Terraform tears down the cluster access entry before the in-cluster resources, so the `helm`/`kubernetes` providers lose auth mid-destroy. Drop those resources from state (they die with the cluster anyway) and re-run:
@@ -258,7 +256,7 @@ cd infra/live/
 >   module.eks_bootstrap.helm_release.aws_lb_controller \
 >   module.eks_bootstrap.helm_release.external_secrets \
 >   module.eks_bootstrap.kubernetes_storage_class_v1.gp3
-> ./tf.sh dev destroy
+> terraform destroy -var-file="dev.tfvars"
 > ```
 
 **Step 3 — Destroy the bootstrap infra** (only after all environments are gone):
