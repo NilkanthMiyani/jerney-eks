@@ -145,3 +145,17 @@ resource "aws_eks_addon" "kube_proxy" {
 
   tags = local.common_tags
 }
+
+# metrics-server — serves the metrics.k8s.io API that HPA reads.
+# Needs nodes running before it can schedule, hence the dependency.
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "metrics-server"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = local.common_tags
+
+  depends_on = [aws_eks_node_group.main]
+}

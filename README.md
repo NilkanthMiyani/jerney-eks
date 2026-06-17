@@ -16,6 +16,8 @@ Production-style Amazon Elastic Kubernetes Service (EKS) deployment of the Jerne
 | TLS | **AWS Certificate Manager (ACM)** | TLS terminated at the ALB |
 | Secrets | **External Secrets Operator** | Syncs AWS Secrets Manager → K8s Secrets (via IRSA) |
 | App | **Jerney** | React frontend + Node.js backend + PostgreSQL |
+| Pod autoscaling | **HPA + metrics-server** | Scales Jerney pods on CPU/memory; metrics-server runs as an EKS addon |
+| Node autoscaling | **Cluster Autoscaler** | Scales the managed node group's ASG up/down (via IRSA + ASG auto-discovery tags) |
 | Observability | **kube-prometheus-stack** | Prometheus + Alertmanager + Grafana |
 | Logs | **Loki + Promtail** | Log aggregation, surfaced in Grafana |
 
@@ -29,14 +31,14 @@ jerney-eks/
 │   └── architecture.svg              # High-level architecture diagram
 ├── infra/
 │   ├── bootstrap/                    # Step 1: S3 Bucket for Terraform remote state
-│   ├── modules/                      # Reusable, single-responsibility resource modules
-│   │   ├── networking/               # VPC + Subnets + Internet/NAT Gateways
-│   │   ├── iam/                      # IAM Roles for EKS
-│   │   ├── eks-cluster/              # EKS cluster + Managed Node Groups + OIDC
-│   │   ├── irsa/                     # IAM Roles for Service Accounts (ALB Controller, ESO, EBS CSI)
-│   │   ├── secrets-manager/          # AWS Secrets Manager secrets
-│   │   └── eks-bootstrap/            # In-cluster bootstrap (ArgoCD, ALB Controller, ESO, gp3 StorageClass)
-│   ├── main.tf                       # Wires all modules together (ONE copy)
+│   ├── policies/                     # IAM JSON policies
+│   ├── networking.tf                 # VPC + Subnets + Internet/NAT Gateways
+│   ├── iam.tf                        # IAM Roles for EKS
+│   ├── eks-cluster.tf                # EKS cluster + Managed Node Groups + OIDC + core addons (incl. metrics-server)
+│   ├── irsa.tf                       # IAM Roles for Service Accounts (ALB Controller, ESO, EBS CSI, Cluster Autoscaler)
+│   ├── secrets.tf                    # AWS Secrets Manager secrets
+│   ├── bootstrap.tf                  # In-cluster bootstrap (ArgoCD, ALB Controller, ESO, Cluster Autoscaler, gp3 StorageClass)
+│   ├── locals.tf                     # Local variables
 │   ├── variables.tf                  # Every knob, no env-specific defaults
 │   ├── outputs.tf                    # All outputs
 │   ├── versions.tf                   # Providers + partial backend (no state key)
@@ -46,28 +48,34 @@ jerney-eks/
 │   ├── staging.tfvars.example        # Staging knobs template
 │   └── prod.tfvars.example           # Prod knobs template
 └── k8s-eks/
-    ├── apps/                         # ArgoCD Application CRs (App-of-Apps)
-    │   ├── platform-config.yaml      # wave 0 — namespaces + resource quotas
-    │   ├── platform-secrets.yaml     # wave 0 — ExternalSecret CRs
-    │   ├── prometheus-stack.yaml     # wave 1
-    │   ├── jerney.yaml               # wave 1
-    │   ├── loki-stack.yaml           # wave 2
-    │   └── ingress-apps.yaml         # wave 2 — Ingress resources
-    │   # Note: The root app, ALB Controller, and ESO are installed by
-    │   #       Terraform (eks-bootstrap) using official HashiCorp providers.
+    ├── apps/                         # ArgoCD Application CRs (App-of-Apps), as Kustomize overlays
+    │   ├── base/                     # The Application CRs + sync-waves (0 → 1 → 2)
+    │   │   ├── kustomization.yaml
+    │   │   ├── platform-config.yaml  # wave 0 — namespaces + resource quotas
+    │   │   ├── platform-secrets.yaml # wave 0 — ExternalSecret CRs
+    │   │   ├── prometheus-stack.yaml # wave 1
+    │   │   ├── jerney.yaml           # wave 1
+    │   │   ├── loki-stack.yaml       # wave 2
+    │   │   └── ingress-apps.yaml     # wave 2 — Ingress resources
+    │   ├── dev/                      # Overlay — points the Jerney app at values-dev.yaml
+    │   ├── staging/                  # Overlay — values-staging.yaml
+    │   └── prod/                     # Overlay — values-prod.yaml
+    │   # Note: The root app, ALB Controller, ESO, and Cluster Autoscaler are
+    │   #       installed by Terraform (bootstrap.tf) using official HashiCorp providers.
     ├── helm/jerney/                  # Jerney application Helm chart
     │   ├── Chart.yaml
-    │   ├── values.yaml
-    │   └── templates/
+    │   ├── values.yaml               # Base values
+    │   ├── values-{dev,staging,prod}.yaml   # Per-environment overrides
+    │   └── templates/                # Deployments, Services, Ingress, HPA, NetworkPolicies
     └── platform/
         ├── governance/               # ResourceQuotas + LimitRanges per namespace
         ├── ingress/                  # Ingress resource definitions
-        ├── external-secrets/         # ExternalSecret CRs
+        ├── external-secrets/         # ClusterSecretStore + ExternalSecret CRs
         ├── prometheus-stack/         # Helm values
         └── loki-stack/               # Helm values
 ```
 
-> The Terraform code uses a **"Single Composition"** pattern. `modules/` holds reusable resources. `infra/main.tf` defines the cluster structure once. The exact environment (`dev`, `staging`, `prod`) is determined entirely by the `.tfvars` file and isolated in its own remote S3 state via **Terraform Workspaces**. A mistake in dev can never affect prod state.
+> The Terraform code uses a **flat structure** pattern. `infra/` holds all resources directly without any module abstraction layers. The exact environment (`dev`, `staging`, `prod`) is determined entirely by the `.tfvars` file and isolated in its own remote S3 state via **Terraform Workspaces**. A mistake in dev can never affect prod state.
 
 ---
 
@@ -249,11 +257,12 @@ terraform destroy -var-file="dev.tfvars"
 > **If destroy fails with `Unauthorized` / `Kubernetes cluster unreachable`:** Terraform tears down the cluster access entry before the in-cluster resources, so the `helm`/`kubernetes` providers lose auth mid-destroy. Drop those resources from state (they die with the cluster anyway) and re-run:
 > ```bash
 > terraform state rm \
->   module.eks_bootstrap.helm_release.argocd \
->   module.eks_bootstrap.helm_release.argocd_apps \
->   module.eks_bootstrap.helm_release.aws_lb_controller \
->   module.eks_bootstrap.helm_release.external_secrets \
->   module.eks_bootstrap.kubernetes_storage_class_v1.gp3
+>   helm_release.argocd \
+>   helm_release.argocd_apps \
+>   helm_release.aws_lb_controller \
+>   helm_release.external_secrets \
+>   helm_release.cluster_autoscaler \
+>   kubernetes_storage_class_v1.gp3
 > terraform destroy -var-file="dev.tfvars"
 > ```
 
