@@ -29,12 +29,12 @@ locals {
         Action = "sts:AssumeRoleWithWebIdentity"
         Effect = "Allow"
         Principal = {
-          Federated = var.oidc_provider_arn
+          Federated = aws_iam_openid_connect_provider.eks.arn
         }
         Condition = {
           StringEquals = {
-            "${var.oidc_provider}:aud" = "sts.amazonaws.com"
-            "${var.oidc_provider}:sub" = "system:serviceaccount:${sa}"
+            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+            "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:${sa}"
           }
         }
       }]
@@ -49,7 +49,7 @@ locals {
 resource "aws_iam_role" "eso" {
   name               = "${var.cluster_name}-eso-role"
   assume_role_policy = local.irsa_trust["external-secrets:external-secrets"]
-  tags               = var.tags
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy" "eso_secrets_read" {
@@ -77,13 +77,13 @@ resource "aws_iam_role_policy" "eso_secrets_read" {
 resource "aws_iam_policy" "alb_controller" {
   name   = "${var.cluster_name}-alb-controller-policy"
   policy = file("${path.module}/policies/alb-controller.json")
-  tags   = var.tags
+  tags   = local.common_tags
 }
 
 resource "aws_iam_role" "alb_controller" {
   name               = "${var.cluster_name}-alb-controller-role"
   assume_role_policy = local.irsa_trust["kube-system:aws-load-balancer-controller"]
-  tags               = var.tags
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "alb_controller" {
@@ -98,7 +98,7 @@ resource "aws_iam_role_policy_attachment" "alb_controller" {
 resource "aws_iam_role" "ebs_csi" {
   name               = "${var.cluster_name}-ebs-csi-role"
   assume_role_policy = local.irsa_trust["kube-system:ebs-csi-controller-sa"]
-  tags               = var.tags
+  tags               = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "ebs_csi" {
@@ -116,7 +116,7 @@ resource "aws_eks_addon" "ebs_csi" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  tags = var.tags
+  tags = local.common_tags
 
   depends_on = [aws_iam_role_policy_attachment.ebs_csi]
 }

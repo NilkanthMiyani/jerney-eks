@@ -15,8 +15,8 @@ locals {
   # Map AZ name -> CIDR for each subnet tier. The environment passes
   # availability_zones and the parallel *_subnet_cidrs lists; we zip
   # them into stable, name-keyed maps for for_each.
-  public_subnets  = { for i, az in var.availability_zones : az => var.public_subnet_cidrs[i] }
-  private_subnets = { for i, az in var.availability_zones : az => var.private_subnet_cidrs[i] }
+  public_subnets  = { for i, az in local.availability_zones : az => var.public_subnet_cidrs[i] }
+  private_subnets = { for i, az in local.availability_zones : az => var.private_subnet_cidrs[i] }
 }
 
 # ---- VPC ----
@@ -25,7 +25,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
   enable_dns_hostnames = true # required for EKS
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-vpc"
   })
 }
@@ -34,7 +34,7 @@ resource "aws_vpc" "main" {
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-igw"
   })
 }
@@ -43,7 +43,7 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   domain = "vpc"
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-nat-eip"
   })
 }
@@ -52,9 +52,9 @@ resource "aws_eip" "nat" {
 # Lives in the first public subnet; private subnets route egress through it.
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[var.availability_zones[0]].id
+  subnet_id     = aws_subnet.public[local.availability_zones[0]].id
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-nat"
   })
 
@@ -71,7 +71,7 @@ resource "aws_subnet" "public" {
   availability_zone       = each.key
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name                                        = "${var.cluster_name}-public-${each.key}"
     "kubernetes.io/role/elb"                    = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
@@ -87,7 +87,7 @@ resource "aws_subnet" "private" {
   cidr_block        = each.value
   availability_zone = each.key
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name                                        = "${var.cluster_name}-private-${each.key}"
     "kubernetes.io/role/internal-elb"           = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
@@ -103,7 +103,7 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.main.id
   }
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-public-rt"
   })
 }
@@ -116,7 +116,7 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main.id
   }
 
-  tags = merge(var.tags, {
+  tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-private-rt"
   })
 }

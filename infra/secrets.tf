@@ -6,19 +6,27 @@
 # these at runtime via the ClusterSecretStore.
 # ==============================================================
 
+locals {
+  secrets = {
+    "jerney-postgres-password"      = var.postgres_password
+    "jerney-grafana-admin-password" = var.grafana_admin_password
+    "jerney-alertmanager-smtp-key"  = var.alertmanager_smtp_key
+  }
+}
+
 # for_each cannot take a sensitive value, so iterate over the secret
 # names (not secret) and look up each sensitive value by key.
 resource "aws_secretsmanager_secret" "this" {
-  for_each = nonsensitive(toset(keys(var.secrets)))
+  for_each = nonsensitive(toset(keys(local.secrets)))
 
   name                    = each.value
   recovery_window_in_days = var.recovery_window_in_days
-  tags                    = var.tags
+  tags                    = local.common_tags
 }
 
 resource "aws_secretsmanager_secret_version" "this" {
   for_each = aws_secretsmanager_secret.this
 
   secret_id     = each.value.id
-  secret_string = var.secrets[each.key]
+  secret_string = local.secrets[each.key]
 }

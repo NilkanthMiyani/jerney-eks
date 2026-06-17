@@ -12,6 +12,8 @@
 # cycle (eks-cluster -> irsa -> eks-cluster).
 # ==============================================================
 
+
+
 # ---- ACM Certificate ----
 # The ALB terminates TLS using this existing wildcard cert (no cert-manager).
 # If acm_certificate_arn is set, it is used directly; otherwise the cert is
@@ -26,21 +28,21 @@ data "aws_acm_certificate" "wildcard" {
 # ---- EKS Cluster ----
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
-  role_arn = var.cluster_role_arn
+  role_arn = aws_iam_role.eks_cluster.arn
   version  = var.kubernetes_version
 
   vpc_config {
-    subnet_ids              = var.subnet_ids
+    subnet_ids              = concat([for s in aws_subnet.public : s.id], [for s in aws_subnet.private : s.id])
     endpoint_private_access = true
     endpoint_public_access  = var.endpoint_public_access
-    public_access_cidrs     = var.endpoint_public_access_cidrs
+    public_access_cidrs     = ["0.0.0.0/0"]
   }
 
   access_config {
     authentication_mode = "API_AND_CONFIG_MAP"
   }
 
-  tags = var.tags
+  tags = local.common_tags
 }
 
 # ---- EKS Access Entry for the Creator ----
@@ -72,17 +74,17 @@ resource "aws_iam_openid_connect_provider" "eks" {
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
-  tags = var.tags
+  tags = local.common_tags
 }
 
 # ---- EKS Managed Node Group ----
 resource "aws_eks_node_group" "main" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "${var.cluster_name}-nodes"
-  node_role_arn   = var.node_role_arn
+  node_role_arn   = aws_iam_role.eks_nodes.arn
 
   # Nodes run in private subnets — egress via NAT Gateway.
-  subnet_ids = var.private_subnet_ids
+  subnet_ids = [for s in aws_subnet.private : s.id]
 
   capacity_type  = var.capacity_type
   instance_types = var.node_instance_types
@@ -98,9 +100,9 @@ resource "aws_eks_node_group" "main" {
     max_unavailable = 1
   }
 
-  labels = var.node_labels
+  labels = local.common_tags
 
-  tags = var.tags
+  tags = local.common_tags
 }
 
 # ==============================================================
@@ -114,7 +116,7 @@ resource "aws_eks_addon" "vpc_cni" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  tags = var.tags
+  tags = local.common_tags
 }
 
 resource "aws_eks_addon" "coredns" {
@@ -124,7 +126,7 @@ resource "aws_eks_addon" "coredns" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  tags = var.tags
+  tags = local.common_tags
 
   depends_on = [aws_eks_node_group.main]
 }
@@ -136,5 +138,5 @@ resource "aws_eks_addon" "kube_proxy" {
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
-  tags = var.tags
+  tags = local.common_tags
 }

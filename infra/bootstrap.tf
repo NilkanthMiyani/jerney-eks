@@ -35,7 +35,7 @@ resource "helm_release" "argocd" {
   name             = "argo-cd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
-  version          = var.argocd_chart_version
+  version          = "9.5.20"
   namespace        = "argocd"
   create_namespace = true
   wait             = true
@@ -58,7 +58,7 @@ resource "helm_release" "argocd_apps" {
   name             = "argocd-apps"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argocd-apps"
-  version          = var.argocd_apps_chart_version
+  version          = "2.0.2"
   namespace        = "argocd"
   create_namespace = false
 
@@ -99,7 +99,7 @@ resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
   chart            = "external-secrets"
-  version          = var.eso_chart_version
+  version          = "0.14.0"
   namespace        = "external-secrets"
   create_namespace = true
   wait             = true
@@ -107,7 +107,7 @@ resource "helm_release" "external_secrets" {
 
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.eso_role_arn
+    value = aws_iam_role.eso.arn
   }
 
   # Only the ESO operator + CRDs are installed here. The ClusterSecretStore
@@ -126,7 +126,7 @@ resource "helm_release" "aws_lb_controller" {
   name             = "aws-load-balancer-controller"
   repository       = "https://aws.github.io/eks-charts"
   chart            = "aws-load-balancer-controller"
-  version          = var.alb_controller_chart_version
+  version          = "1.11.0"
   namespace        = "kube-system"
   create_namespace = false
   wait             = true
@@ -144,7 +144,7 @@ resource "helm_release" "aws_lb_controller" {
 
   set {
     name  = "vpcId"
-    value = var.vpc_id
+    value = aws_vpc.main.id
   }
 
   set {
@@ -159,7 +159,7 @@ resource "helm_release" "aws_lb_controller" {
 
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = var.alb_controller_role_arn
+    value = aws_iam_role.alb_controller.arn
   }
 
   depends_on = [helm_release.argocd]

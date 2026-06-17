@@ -26,7 +26,7 @@ resource "aws_iam_role" "eks_cluster" {
     }]
   })
 
-  tags = var.tags
+  tags = local.common_tags
 }
 
 resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
@@ -49,7 +49,7 @@ resource "aws_iam_role" "eks_nodes" {
     }]
   })
 
-  tags = var.tags
+  tags = local.common_tags
 }
 
 locals {
