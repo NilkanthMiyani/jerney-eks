@@ -6,6 +6,9 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}-frontend
     app.kubernetes.io/part-of: {{ .Chart.Name }}
     app.kubernetes.io/component: frontend
+  annotations:
+    # Frontend syncs only after backend (wave 0) is Healthy.
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   # replicas managed by HPA
   selector:

@@ -22,6 +22,7 @@ locals {
       "external-secrets:external-secrets",
       "kube-system:aws-load-balancer-controller",
       "kube-system:ebs-csi-controller-sa",
+      "kube-system:cluster-autoscaler",
     ]) :
     sa => jsonencode({
       Version = "2012-10-17"
@@ -119,4 +120,56 @@ resource "aws_eks_addon" "ebs_csi" {
   tags = local.common_tags
 
   depends_on = [aws_iam_role_policy_attachment.ebs_csi]
+}
+
+# ==============================================================
+# IRSA: Cluster Autoscaler
+# ==============================================================
+
+resource "aws_iam_role" "cluster_autoscaler" {
+  name               = "${var.cluster_name}-cluster-autoscaler-role"
+  assume_role_policy = local.irsa_trust["kube-system:cluster-autoscaler"]
+  tags               = local.common_tags
+}
+
+resource "aws_iam_role_policy" "cluster_autoscaler" {
+  name = "cluster-autoscaler"
+  role = aws_iam_role.cluster_autoscaler.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ClusterAutoscalerActions"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup",
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+          }
+        }
+      },
+      {
+        Sid    = "ClusterAutoscalerReadOnly"
+        Effect = "Allow"
+        Action = [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:DescribeScalingActivities",
+          "autoscaling:DescribeTags",
+          "ec2:DescribeImages",
+          "ec2:DescribeInstanceTypes",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:GetInstanceTypesFromInstanceRequirements",
+          "eks:DescribeNodegroup",
+        ]
+        Resource = "*"
+      },
+    ]
+  })
 }

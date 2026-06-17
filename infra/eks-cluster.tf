@@ -102,7 +102,12 @@ resource "aws_eks_node_group" "main" {
 
   labels = local.common_tags
 
-  tags = local.common_tags
+  # common_tags + Cluster Autoscaler auto-discovery tags. EKS propagates
+  # these to the underlying ASG, letting CA find and scale this node group.
+  tags = merge(local.common_tags, {
+    "k8s.io/cluster-autoscaler/enabled"             = "true"
+    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
+  })
 }
 
 # ==============================================================

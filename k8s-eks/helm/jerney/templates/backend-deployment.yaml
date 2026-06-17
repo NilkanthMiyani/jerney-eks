@@ -6,6 +6,9 @@ metadata:
     app.kubernetes.io/name: {{ .Chart.Name }}-backend
     app.kubernetes.io/part-of: {{ .Chart.Name }}
     app.kubernetes.io/component: backend
+  annotations:
+    # Backend syncs first; ArgoCD waits until it is Healthy before wave 1.
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   # replicas managed by HPA
   selector:

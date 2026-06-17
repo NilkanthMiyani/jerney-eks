@@ -103,6 +103,12 @@ variable "gitops_apps_path" {
   type        = string
 }
 
+variable "ca_chart_version" {
+  description = "Helm chart version for the Kubernetes Cluster Autoscaler"
+  type        = string
+  default     = "9.57.0"
+}
+
 variable "postgres_password" {
   description = "PostgreSQL password — stored as 'jerney-postgres-password'"
   type        = string

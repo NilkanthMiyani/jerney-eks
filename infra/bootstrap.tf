@@ -164,3 +164,48 @@ resource "helm_release" "aws_lb_controller" {
 
   depends_on = [helm_release.argocd]
 }
+
+# ---- 2c. Cluster Autoscaler ----
+# Discovers the managed node group's ASG via the
+# k8s.io/cluster-autoscaler/* tags set in eks-cluster.tf and scales it
+# up on pending pods / down on underutilized nodes.
+resource "helm_release" "cluster_autoscaler" {
+  name             = "cluster-autoscaler"
+  repository       = "https://kubernetes.github.io/autoscaler"
+  chart            = "cluster-autoscaler"
+  version          = var.ca_chart_version
+  namespace        = "kube-system"
+  create_namespace = false
+  wait             = true
+  timeout          = 300
+
+  set {
+    name  = "autoDiscovery.clusterName"
+    value = var.cluster_name
+  }
+
+  set {
+    name  = "awsRegion"
+    value = var.aws_region
+  }
+
+  set {
+    name  = "rbac.serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "rbac.serviceAccount.name"
+    value = "cluster-autoscaler"
+  }
+
+  set {
+    name  = "rbac.serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.cluster_autoscaler.arn
+  }
+
+  depends_on = [
+    aws_iam_role_policy.cluster_autoscaler,
+    aws_eks_addon.coredns,
+  ]
+}

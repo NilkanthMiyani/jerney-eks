@@ -22,7 +22,7 @@ terraform {
 
   backend "s3" {
     # Terraform Workspaces will automatically prepend `env:/<workspace_name>/` to this key.
-    bucket       = "jerney-tfstate-zgrsp2"
+    bucket       = "jerney-tfstate-0vgnct"
     key          = "jerney-eks/terraform.tfstate"
     region       = "ap-south-1"
     use_lockfile = true
