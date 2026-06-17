@@ -40,20 +40,6 @@ resource "kubernetes_storage_class_v1" "gp3" {
   allow_volume_expansion = true
 }
 
-# Demote the built-in gp2 StorageClass so gp3 is the sole default.
-# EKS ships gp2 on every cluster, so we patch the existing object's annotation
-# instead of creating it (which collides with "gp2 already exists").
-resource "kubernetes_annotations" "gp2_not_default" {
-  api_version = "storage.k8s.io/v1"
-  kind        = "StorageClass"
-  metadata {
-    name = "gp2"
-  }
-  annotations = {
-    "storageclass.kubernetes.io/is-default-class" = "false"
-  }
-  force = true
-}
 
 # ---- 1. ArgoCD + Root App ----
 resource "helm_release" "argocd" {
