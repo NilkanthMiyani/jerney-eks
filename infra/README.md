@@ -1,16 +1,4 @@
-# Jerney EKS — Terraform Infrastructure (Layer 1)
-
-Flat-structured Terraform that provisions **only the EKS cluster and its IAM**, using the
-`aws` provider exclusively (plus `tls` for the OIDC thumbprint). No resource here touches the
-Kubernetes API — there is no `helm` or `kubernetes` provider.
-
-In-cluster platform tooling (ArgoCD, the gp3 StorageClass, ingress, etc.) is installed by a
-**separate bootstrap stage (Pattern B)** that consumes this layer's outputs. Terraform's job ends
-at a ready cluster plus the IAM roles that bootstrap wires to service accounts.
-
-For the full setup and operational guide, see the **[Root README](../README.md)**.
-
-## What this layer creates
+# Jerney EKS — Terraform Infrastructure
 
 - VPC, subnets, Internet Gateway, NAT Gateway(s), route tables
 - EKS control plane (control-plane logging enabled)
@@ -104,7 +92,8 @@ terraform workspace select dev
 terraform destroy -var-file="dev.tfvars"
 ```
 
-> Note: any AWS resources the in-cluster platform created out-of-band (ALBs and their security
-> groups from the LB controller, EBS volumes from PVCs) are owned by the bootstrap stage, not by
-> this layer. Tear the bootstrap stage down first so those are cleaned up before destroying the
-> cluster, then sweep for any orphaned ALBs / SGs / volumes.
+> Note: ALBs/NLBs + their security groups (AWS LB Controller) and EBS volumes (EBS CSI, for PVCs)
+> are created **at runtime by in-cluster controllers** and aren't tracked in any Terraform state.
+> Before destroying the cluster, delete the app's `Ingress`/`Service`/`PVC` objects **while their
+> controllers are still running** so the controllers deprovision the AWS resources — then sweep for
+> any orphaned ALBs / SGs / volumes.
