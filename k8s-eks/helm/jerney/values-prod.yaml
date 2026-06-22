@@ -24,6 +24,6 @@ ingress:
   host: jerney.nilkanthprojects.site
   certificateArn: "arn:aws:acm:ap-south-1:310318659882:certificate/9144a150-f7ed-4286-8e3d-18e81950e4ee"
   groupName: jerney-platform
-
+  
 networkPolicy:
   vpcCidr: "10.2.0.0/16"

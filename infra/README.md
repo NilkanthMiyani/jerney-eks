@@ -1,72 +1,110 @@
-# Jerney EKS — Terraform Infrastructure
+# Jerney EKS — Terraform Infrastructure (Layer 1)
 
-Flat-structured Terraform for the Jerney EKS platform. All resources are defined directly in the `infra/` directory.
+Flat-structured Terraform that provisions **only the EKS cluster and its IAM**, using the
+`aws` provider exclusively (plus `tls` for the OIDC thumbprint). No resource here touches the
+Kubernetes API — there is no `helm` or `kubernetes` provider.
 
-For complete setup, deployment, and operational instructions, **please see the [Root README](../README.md)**.
+In-cluster platform tooling (ArgoCD, the gp3 StorageClass, ingress, etc.) is installed by a
+**separate bootstrap stage (Pattern B)** that consumes this layer's outputs. Terraform's job ends
+at a ready cluster plus the IAM roles that bootstrap wires to service accounts.
+
+For the full setup and operational guide, see the **[Root README](../README.md)**.
+
+## What this layer creates
+
+- VPC, subnets, Internet Gateway, NAT Gateway(s), route tables
+- EKS control plane (control-plane logging enabled)
+- OIDC provider for IRSA
+- Managed node group
+- EKS managed addons: `vpc-cni`, `coredns`, `kube-proxy`, `metrics-server`, `aws-ebs-csi-driver`
+- IRSA IAM role (created, not attached to any workload): EBS CSI
+- ECR repositories for the app images (`jerney-frontend`, `jerney-backend`)
 
 ## Layout
 
 ```text
 infra/
 ├── bootstrap/                # S3 bucket for remote state (run once)
-├── policies/                 # IAM JSON policies
-├── networking.tf             # VPC, IGW, NAT, subnets, route tables
-├── iam.tf                    # EKS cluster role + node group role
-├── eks-cluster.tf            # EKS cluster, OIDC provider, node group, core addons (incl. metrics-server), ACM lookup
-├── irsa.tf                   # ESO / ALB Controller / EBS CSI / Cluster Autoscaler IRSA roles + EBS CSI addon
-├── secrets.tf                # Secrets Manager secrets
-├── bootstrap.tf              # ArgoCD, ALB Controller, ESO, Cluster Autoscaler, gp3 StorageClass
-├── locals.tf                 # Local variables
+├── vpc.tf                    # VPC, IGW, NAT (single or per-AZ), subnets, route tables
+├── iam.tf                    # EKS cluster role, node group role, EBS CSI IRSA role
+├── eks.tf                    # EKS cluster (logging), OIDC, node group, managed addons
+├── ecr.tf                    # ECR repos for the app images
+├── locals.tf                 # Local variables (tags, AZs)
 ├── variables.tf              # Every knob, no env-specific defaults
-├── outputs.tf                # All outputs
-├── versions.tf               # Providers + partial backend (no state key)
-├── providers.tf              # aws, helm, kubernetes provider configs
+├── outputs.tf                # Contract consumed by the bootstrap stage
+├── versions.tf               # required_providers (aws, tls) + S3 backend
+├── providers.tf              # aws provider config only
 ├── dev.tfvars.example        # Dev environment variables template
 ├── staging.tfvars.example    # Staging environment variables template
 └── prod.tfvars.example       # Prod environment variables template
 ```
 
+## Outputs (the handoff to bootstrap)
+
+| Output | Purpose |
+|---|---|
+| `cluster_name`, `cluster_endpoint`, `cluster_ca_data` | kubeconfig / API access for bootstrap |
+| `cluster_security_group_id` | Cluster SG for any add-on that needs it |
+| `oidc_provider_arn`, `oidc_provider_url` | Build IRSA trust for additional service accounts |
+| `ebs_csi_role_arn` | Annotate the EBS CSI service account (`eks.amazonaws.com/role-arn`) |
+| `ecr_repository_urls` | App image repos for the bootstrap stage / CI |
+| `vpc_id`, `public_subnets`, `private_subnets` | Networking references |
+| `kubeconfig_command` | Convenience for connecting kubectl |
+
 ## Usage
 
-To apply infrastructure, navigate to the `infra/` directory and use **Terraform Workspaces**. This ensures the state is isolated per environment.
+Use **Terraform Workspaces** so each environment's state is isolated.
 
 ```bash
-cd ./
+cd infra/
 
 # 1. Initialize (run once)
 terraform init
 
-# 2. Fresh Setup: Create the workspaces for the first time
+# 2. Fresh setup: create workspaces
 terraform workspace new dev
 terraform workspace new staging
 terraform workspace new prod
 
-# 3. Switch to the target workspace
+# 3. Select the target workspace
 terraform workspace select dev
 
-# 4. Plan and apply the environment using its variables
-terraform plan -var-file="dev.tfvars"
+# 4. Plan and apply with the environment's variables
+terraform plan  -var-file="dev.tfvars"
 terraform apply -var-file="dev.tfvars"
 ```
 
-*(Note: Secrets like `postgres_password` must be passed via environment variables before running the script. See the root README for the full deployment guide).*
+## Prod hardening knobs
+
+- **NAT gateways** — one NAT per AZ (HA by default). Non-prod cost is controlled by `az_count` (fewer AZs = fewer NATs), not by a NAT toggle.
+- **`endpoint_public_access` / `public_access_cidrs`** — keep the API endpoint private in prod, or restrict the public endpoint to known CIDRs. Never leave prod open to `0.0.0.0/0`.
+- **Control-plane logging** — all log types (`api`, `audit`, `authenticator`, `controllerManager`, `scheduler`) are shipped to CloudWatch.
 
 ## Resource dependency graph
 
 ```text
-networking.tf ──┐
-iam.tf ─────────┤
-                ├── eks-cluster.tf ── irsa.tf ── bootstrap.tf
-secrets.tf ────────────────────────────────────/
+vpc.tf ──┐
+iam.tf ──┼── eks.tf ── (managed addons, incl. EBS CSI wired to the IRSA role in iam.tf)
 ```
 
-The classic EKS IRSA cycle (IRSA roles need the OIDC provider → which needs the cluster → which needs the cluster role) is intentionally broken by splitting IAM:
+Terraform orders these from the resource references, not the file names: `eks.tf` creates the
+cluster and OIDC provider, and the EBS CSI IRSA role in `iam.tf` references that OIDC provider, so
+it is created after the cluster. The base cluster/node roles in `iam.tf` have no OIDC dependency,
+so there is no cycle and the whole layer applies in a single `terraform apply`.
 
-- `iam.tf` creates only the cluster + node roles (no OIDC dependency).
-- `eks-cluster.tf` creates the cluster and the OIDC provider.
-- `irsa.tf` consumes the OIDC provider and creates the IRSA roles. The `aws-ebs-csi-driver` addon lives here too (not in `eks-cluster.tf`) because it needs its IRSA role at create time — keeping it downstream makes the graph linear and lets everything apply in a single `terraform apply`.
+## Destroy
 
-## Notes
+Because Terraform no longer manages anything inside the cluster, destroy is a plain
+`terraform destroy` — there is no helm/kubernetes provider to lose auth mid-destroy, and no
+`state rm` workaround.
 
-- **Autoscaling.** The managed node group carries `k8s.io/cluster-autoscaler/*` auto-discovery tags (`eks-cluster.tf`) so the Cluster Autoscaler (`bootstrap.tf`, using the IRSA role from `irsa.tf`) can scale the ASG on pending pods. Pod-level scaling is handled by HPA in the Jerney chart, backed by the `metrics-server` EKS addon (`eks-cluster.tf`).
-- Prod's private-only API endpoint means Terraform must run from inside the VPC (or a peered/VPN network) so the helm/kubernetes providers can reach the cluster. To solve this, you can provision a **Bastion Host** (an EC2 instance) in one of the VPC's public subnets. You can then use SSH port forwarding (`ssh -L`) or AWS Systems Manager (SSM) Session Manager to jump through the bastion to securely run `kubectl` and `terraform apply` against the private cluster.
+```bash
+cd infra/
+terraform workspace select dev
+terraform destroy -var-file="dev.tfvars"
+```
+
+> Note: any AWS resources the in-cluster platform created out-of-band (ALBs and their security
+> groups from the LB controller, EBS volumes from PVCs) are owned by the bootstrap stage, not by
+> this layer. Tear the bootstrap stage down first so those are cleaned up before destroying the
+> cluster, then sweep for any orphaned ALBs / SGs / volumes.

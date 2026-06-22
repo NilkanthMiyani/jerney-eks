@@ -1,41 +1,22 @@
 # ==============================================================
-# Module: eks-cluster
-#
 # EKS control plane + OIDC provider (for IRSA) + managed node group
-# + core EKS addons that need no IRSA role (vpc-cni, coredns,
-# kube-proxy). It also looks up the ACM wildcard certificate used
-# by ALB Ingress annotations.
-#
-# The aws-ebs-csi-driver addon is intentionally NOT here: it needs
-# an IRSA role created in modules/irsa, which in turn needs this
-# module's OIDC outputs. Keeping it downstream avoids a dependency
-# cycle (eks-cluster -> irsa -> eks-cluster).
+# + EKS managed addons (vpc-cni, coredns, kube-proxy, metrics-server,
+# aws-ebs-csi-driver).
 # ==============================================================
-
-
-
-# ---- ACM Certificate ----
-# The ALB terminates TLS using this existing wildcard cert (no cert-manager).
-# If acm_certificate_arn is set, it is used directly; otherwise the cert is
-# looked up by domain_name.
-data "aws_acm_certificate" "wildcard" {
-  count       = var.acm_certificate_arn == "" ? 1 : 0
-  domain      = var.domain_name
-  statuses    = ["ISSUED"]
-  most_recent = true
-}
 
 # ---- EKS Cluster ----
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = var.kubernetes_version
+  version  = var.cluster_version
+
+  enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
   vpc_config {
     subnet_ids              = concat([for s in aws_subnet.public : s.id], [for s in aws_subnet.private : s.id])
     endpoint_private_access = true
     endpoint_public_access  = var.endpoint_public_access
-    public_access_cidrs     = ["0.0.0.0/0"]
+    public_access_cidrs     = var.public_access_cidrs
   }
 
   access_config {
@@ -102,16 +83,11 @@ resource "aws_eks_node_group" "main" {
 
   labels = local.common_tags
 
-  # common_tags + Cluster Autoscaler auto-discovery tags. EKS propagates
-  # these to the underlying ASG, letting CA find and scale this node group.
-  tags = merge(local.common_tags, {
-    "k8s.io/cluster-autoscaler/enabled"             = "true"
-    "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
-  })
+  tags = local.common_tags
 }
 
 # ==============================================================
-# Core EKS Addons (no IRSA role required)
+# EKS Managed Addons
 # ==============================================================
 
 resource "aws_eks_addon" "vpc_cni" {
@@ -158,4 +134,19 @@ resource "aws_eks_addon" "metrics_server" {
   tags = local.common_tags
 
   depends_on = [aws_eks_node_group.main]
+}
+
+# aws-ebs-csi-driver — wired to the EBS CSI IRSA role from iam.tf so
+# the controller can manage EBS volumes via IRSA (no node credentials).
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = aws_iam_role.ebs_csi.arn
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = local.common_tags
+
+  depends_on = [aws_iam_role_policy_attachment.ebs_csi]
 }

@@ -3,12 +3,12 @@ aws_profile = "nilkanthaws9"
 
 cluster_name       = "jerney-eks-stg"
 environment        = "stg"
-kubernetes_version = "1.35"
+cluster_version    = "1.35"
 
 vpc_cidr             = "10.1.0.0/16"
 public_subnet_cidrs  = ["10.1.0.0/24", "10.1.1.0/24"]
 private_subnet_cidrs = ["10.1.10.0/24", "10.1.11.0/24"]
-az_count             = 2
+az_count             = 2 # NAT gateways scale with AZ count
 
 node_instance_types = ["t3.medium"]
 capacity_type       = "SPOT"
@@ -17,16 +17,4 @@ max_node_count      = 5
 disk_size_gb        = 30
 
 endpoint_public_access = true
-domain_name            = "*.nilkanthprojects.site"
-acm_certificate_arn    = "arn:aws:acm:ap-south-1:310318659882:certificate/9144a150-f7ed-4286-8e3d-18e81950e4ee"
-
-recovery_window_in_days = 0
-
-gitops_repo_url        = "https://github.com/NilkanthMiyani/jerney-eks.git"
-gitops_target_revision = "main"
-gitops_apps_path       = "k8s-eks/apps/staging"
-
-# Secrets should be injected via environment variables (TF_VAR_postgres_password) or secrets.auto.tfvars
-postgres_password      = "<YOUR_POSTGRES_PASSWORD_HERE>"
-grafana_admin_password = "<YOUR_GRAFANA_PASSWORD_HERE>"
-alertmanager_smtp_key  = "<YOUR_SMTP_KEY_HERE>"
+public_access_cidrs    = ["0.0.0.0/0"]

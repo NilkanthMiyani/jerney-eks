@@ -1,14 +1,8 @@
 # ==============================================================
-# Module: iam
-#
-# Base IAM roles that do NOT depend on the cluster OIDC provider:
+# All cluster IAM, in one file:
 #   - EKS cluster control-plane role
 #   - EKS managed node group role
-#
-# IRSA roles (ESO, ALB Controller, EBS CSI) live in modules/irsa
-# because they need the OIDC provider that only exists after the
-# cluster is created. Keeping base roles here lets the cluster be
-# built without a dependency cycle.
+#   - EBS CSI IRSA role (depends on the OIDC provider from eks.tf)
 # ==============================================================
 
 # ---- EKS Cluster IAM Role ----
@@ -64,4 +58,35 @@ resource "aws_iam_role_policy_attachment" "eks_node_policies" {
   for_each   = toset(local.node_policies)
   policy_arn = each.value
   role       = aws_iam_role.eks_nodes.name
+}
+
+# ---- EBS CSI Driver IRSA Role ----
+# The aws-ebs-csi-driver addon (eks.tf) assumes this role via IRSA so the
+# controller can manage EBS volumes without node credentials.
+resource "aws_iam_role" "ebs_csi" {
+  name = "${var.cluster_name}-ebs-csi-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.eks.arn
+      }
+      Condition = {
+        StringEquals = {
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+          "${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:kube-system:ebs-csi-controller-sa"
+        }
+      }
+    }]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_role_policy_attachment" "ebs_csi" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  role       = aws_iam_role.ebs_csi.name
 }

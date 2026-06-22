@@ -18,8 +18,8 @@ variable "environment" {
   type        = string
 }
 
-variable "kubernetes_version" {
-  description = "EKS Kubernetes version"
+variable "cluster_version" {
+  description = "EKS control-plane Kubernetes version"
   type        = string
 }
 
@@ -73,56 +73,8 @@ variable "endpoint_public_access" {
   type        = bool
 }
 
-variable "domain_name" {
-  description = "Wildcard domain for ACM certificate lookup"
-  type        = string
-}
-
-variable "acm_certificate_arn" {
-  description = "Explicit ACM wildcard certificate ARN for ALB TLS. Empty = look up by domain_name."
-  type        = string
-}
-
-variable "recovery_window_in_days" {
-  description = "Secrets Manager recovery window"
-  type        = number
-}
-
-variable "gitops_repo_url" {
-  description = "Git repository ArgoCD's root app watches"
-  type        = string
-}
-
-variable "gitops_target_revision" {
-  description = "Git branch the root app tracks"
-  type        = string
-}
-
-variable "gitops_apps_path" {
-  description = "Path within the repo holding ArgoCD Application manifests"
-  type        = string
-}
-
-variable "ca_chart_version" {
-  description = "Helm chart version for the Kubernetes Cluster Autoscaler"
-  type        = string
-  default     = "9.57.0"
-}
-
-variable "postgres_password" {
-  description = "PostgreSQL password — stored as 'jerney-postgres-password'"
-  type        = string
-  sensitive   = true
-}
-
-variable "grafana_admin_password" {
-  description = "Grafana admin password — stored as 'jerney-grafana-admin-password'"
-  type        = string
-  sensitive   = true
-}
-
-variable "alertmanager_smtp_key" {
-  description = "Resend SMTP API key — stored as 'jerney-alertmanager-smtp-key'"
-  type        = string
-  sensitive   = true
+variable "public_access_cidrs" {
+  description = "CIDRs allowed to reach the public EKS API endpoint. Restrict in prod; ignored when endpoint_public_access = false."
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }

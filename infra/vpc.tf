@@ -1,14 +1,16 @@
 # ==============================================================
-# Module: networking
-#
 # VPC + all networking primitives for an EKS cluster:
-#   VPC, Internet Gateway, single NAT Gateway (cost-optimized),
-#   public subnets (for ALB) and private subnets (for nodes),
-#   route tables and associations.
+#   VPC, Internet Gateway, NAT Gateways, public subnets (for ALB)
+#   and private subnets (for nodes), route tables and associations.
 #
-# Subnets use for_each keyed by AZ name (not count) so that adding
-# or removing an AZ never re-indexes — and therefore never destroys —
-# existing subnets.
+# One NAT gateway per AZ: egress for each AZ's private subnet routes
+# through that AZ's own NAT, so a single AZ outage can't cut egress for
+# the others. Non-prod cost scales with the number of AZs (fewer AZs =
+# fewer NATs), configured in tfvars — there is no NAT toggle.
+#
+# Every NAT / EIP / route-table resource is keyed by AZ name via
+# for_each (matching the subnets), so adding or removing an AZ never
+# re-indexes — and therefore never destroys — existing resources.
 # ==============================================================
 
 locals {
@@ -39,23 +41,24 @@ resource "aws_internet_gateway" "main" {
   })
 }
 
-# ---- Elastic IP for NAT Gateway ----
+# ---- Elastic IPs (one per private subnet / AZ) ----
 resource "aws_eip" "nat" {
-  domain = "vpc"
+  for_each = aws_subnet.private
+  domain   = "vpc"
 
   tags = merge(local.common_tags, {
-    Name = "${var.cluster_name}-nat-eip"
+    Name = "${var.cluster_name}-nat-eip-${each.key}"
   })
 }
 
-# ---- NAT Gateway (single — cost saving, ~$32/mo vs ~$96/mo for 3-AZ HA) ----
-# Lives in the first public subnet; private subnets route egress through it.
+# ---- NAT Gateways (one per AZ, in that AZ's public subnet) ----
 resource "aws_nat_gateway" "main" {
-  allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public[local.availability_zones[0]].id
+  for_each      = aws_subnet.private
+  allocation_id = aws_eip.nat[each.key].id
+  subnet_id     = aws_subnet.public[each.key].id
 
   tags = merge(local.common_tags, {
-    Name = "${var.cluster_name}-nat"
+    Name = "${var.cluster_name}-nat-${each.key}"
   })
 
   depends_on = [aws_internet_gateway.main]
@@ -108,16 +111,18 @@ resource "aws_route_table" "public" {
   })
 }
 
+# ---- Private Route Tables (one per AZ, egress via that AZ's NAT) ----
 resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
+  for_each = aws_subnet.private
+  vpc_id   = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main.id
+    nat_gateway_id = aws_nat_gateway.main[each.key].id
   }
 
   tags = merge(local.common_tags, {
-    Name = "${var.cluster_name}-private-rt"
+    Name = "${var.cluster_name}-private-rt-${each.key}"
   })
 }
 
@@ -130,5 +135,5 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table_association" "private" {
   for_each       = aws_subnet.private
   subnet_id      = each.value.id
-  route_table_id = aws_route_table.private.id
+  route_table_id = aws_route_table.private[each.key].id
 }
