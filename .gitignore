@@ -23,6 +23,3 @@ override.tf.json
 *.swp
 *.swo
 
-# ---- Notes ----
-problem.txt
-CLAUDE.md
