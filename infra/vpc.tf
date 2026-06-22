@@ -1,22 +1,8 @@
-# ==============================================================
-# VPC + all networking primitives for an EKS cluster:
-#   VPC, Internet Gateway, NAT Gateways, public subnets (for ALB)
-#   and private subnets (for nodes), route tables and associations.
-#
-# One NAT gateway per AZ: egress for each AZ's private subnet routes
-# through that AZ's own NAT, so a single AZ outage can't cut egress for
-# the others. Non-prod cost scales with the number of AZs (fewer AZs =
-# fewer NATs), configured in tfvars — there is no NAT toggle.
-#
-# Every NAT / EIP / route-table resource is keyed by AZ name via
-# for_each (matching the subnets), so adding or removing an AZ never
-# re-indexes — and therefore never destroys — existing resources.
-# ==============================================================
+# VPC, subnets, IGW, and one NAT gateway per AZ. Everything is keyed by
+# AZ name via for_each so adding/removing an AZ never re-indexes resources.
 
 locals {
-  # Map AZ name -> CIDR for each subnet tier. The environment passes
-  # availability_zones and the parallel *_subnet_cidrs lists; we zip
-  # them into stable, name-keyed maps for for_each.
+  # AZ name -> CIDR for each subnet tier, keyed for for_each.
   public_subnets  = { for i, az in local.availability_zones : az => var.public_subnet_cidrs[i] }
   private_subnets = { for i, az in local.availability_zones : az => var.private_subnet_cidrs[i] }
 }
@@ -25,7 +11,7 @@ locals {
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
-  enable_dns_hostnames = true # required for EKS
+  enable_dns_hostnames = true
 
   tags = merge(local.common_tags, {
     Name = "${var.cluster_name}-vpc"

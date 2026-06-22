@@ -17,4 +17,6 @@ max_node_count      = 5
 disk_size_gb        = 30
 
 endpoint_public_access = true
+
+# we can add office ip here to restrict access
 public_access_cidrs    = ["0.0.0.0/0"]
