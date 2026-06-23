@@ -46,7 +46,3 @@ resource "aws_security_group_rule" "node_egress_all" {
   security_group_id = aws_security_group.jerney_nodegroup.id
   cidr_blocks       = ["0.0.0.0/0"]
 }
-
-# No ALB security group is declared here. The AWS Load Balancer Controller
-# (Layer 2) creates and manages its own frontend SG for the ALB at runtime, so
-# pre-declaring one in infra would just be an unattached, dead object.
