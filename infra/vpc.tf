@@ -1,5 +1,5 @@
-# VPC, subnets, IGW, and one NAT gateway per AZ. Everything is keyed by
-# AZ name via for_each so adding/removing an AZ never re-indexes resources.
+# VPC, subnets, IGW, and NAT gateways (either one per AZ or a single shared NAT).
+# Everything is keyed by AZ name via for_each so adding/removing an AZ never re-indexes resources.
 
 locals {
   # AZ name -> CIDR for each subnet tier, keyed for for_each.
