@@ -78,3 +78,8 @@ variable "public_access_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "single_nat_gateway" {
+  description = "If true, provisions a single NAT gateway for the entire VPC (cost-saving for labs). If false, provisions one per AZ (HA for production)."
+  type        = bool
+}

@@ -27,9 +27,9 @@ resource "aws_internet_gateway" "main" {
   })
 }
 
-# ---- Elastic IPs (one per private subnet / AZ) ----
+# ---- Elastic IPs (one per private subnet / AZ, OR just one if single_nat_gateway is true) ----
 resource "aws_eip" "nat" {
-  for_each = aws_subnet.private
+  for_each = var.single_nat_gateway ? toset([local.availability_zones[0]]) : toset(local.availability_zones)
   domain   = "vpc"
 
   tags = merge(local.common_tags, {
@@ -37,9 +37,9 @@ resource "aws_eip" "nat" {
   })
 }
 
-# ---- NAT Gateways (one per AZ, in that AZ's public subnet) ----
+# ---- NAT Gateways ----
 resource "aws_nat_gateway" "main" {
-  for_each      = aws_subnet.private
+  for_each      = var.single_nat_gateway ? toset([local.availability_zones[0]]) : toset(local.availability_zones)
   allocation_id = aws_eip.nat[each.key].id
   subnet_id     = aws_subnet.public[each.key].id
 
@@ -65,6 +65,13 @@ resource "aws_subnet" "public" {
     "kubernetes.io/role/elb"                    = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(var.public_subnet_cidrs) == var.az_count
+      error_message = "Public subnet count must equal AZ count."
+    }
+  }
 }
 
 # ---- Private Subnets (for EKS nodes) ----
@@ -81,6 +88,13 @@ resource "aws_subnet" "private" {
     "kubernetes.io/role/internal-elb"           = "1"
     "kubernetes.io/cluster/${var.cluster_name}" = "owned"
   })
+
+  lifecycle {
+    precondition {
+      condition     = length(var.private_subnet_cidrs) == var.az_count
+      error_message = "Private subnet count must equal AZ count."
+    }
+  }
 }
 
 # ---- Route Tables ----
@@ -97,14 +111,14 @@ resource "aws_route_table" "public" {
   })
 }
 
-# ---- Private Route Tables (one per AZ, egress via that AZ's NAT) ----
+# ---- Private Route Tables (one per AZ, egress via that AZ's NAT or the single NAT) ----
 resource "aws_route_table" "private" {
   for_each = aws_subnet.private
   vpc_id   = aws_vpc.main.id
 
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.main[each.key].id
+    nat_gateway_id = var.single_nat_gateway ? aws_nat_gateway.main[local.availability_zones[0]].id : aws_nat_gateway.main[each.key].id
   }
 
   tags = merge(local.common_tags, {

@@ -20,3 +20,6 @@ endpoint_public_access = true
 
 # we can add office ip here to restrict access
 public_access_cidrs    = ["0.0.0.0/0"]
+
+# NAT HA
+single_nat_gateway = true
