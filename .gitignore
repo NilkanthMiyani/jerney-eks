@@ -23,3 +23,6 @@ override.tf.json
 *.swp
 *.swo
 
+# ---- Local docs ----
+.docs/
+

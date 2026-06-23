@@ -16,10 +16,12 @@ min_node_count      = 3
 max_node_count      = 8
 disk_size_gb        = 50
 
-# If the API endpoint is public, restrict it to known CIDRs (office/VPN),
-# or set endpoint_public_access = false for a private-only endpoint.
-endpoint_public_access = true
-public_access_cidrs    = ["203.0.113.0/24"]
+# Prod runs a private-only API endpoint. public_access_cidrs is left at its
+# default and ignored while the endpoint is private.
+# If you ever enable the public endpoint, you MUST set a restricted office/VPN
+# CIDR list (e.g. ["<YOUR_OFFICE_OR_VPN_CIDR>/32"]) — wide-open (0.0.0.0/0) is
+# never allowed for prod.
+endpoint_public_access = false
 
 # NAT HA
 single_nat_gateway = false

@@ -5,22 +5,28 @@
 # ---- Cluster connection ----
 output "cluster_name" {
   description = "EKS cluster name"
-  value       = aws_eks_cluster.main.name
+  value       = aws_eks_cluster.jerney_ekscluster.name
 }
 
 output "cluster_endpoint" {
   description = "EKS cluster API endpoint"
-  value       = aws_eks_cluster.main.endpoint
+  value       = aws_eks_cluster.jerney_ekscluster.endpoint
 }
 
 output "cluster_ca_data" {
   description = "Base64-encoded cluster CA certificate"
-  value       = aws_eks_cluster.main.certificate_authority[0].data
+  value       = aws_eks_cluster.jerney_ekscluster.certificate_authority[0].data
 }
 
 output "cluster_security_group_id" {
   description = "Cluster security group created and managed by EKS"
-  value       = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+  value       = aws_eks_cluster.jerney_ekscluster.vpc_config[0].cluster_security_group_id
+}
+
+# ---- Security groups ----
+output "node_security_group_id" {
+  description = "Security group attached to the worker nodes"
+  value       = aws_security_group.jerney_nodegroup.id
 }
 
 # ---- OIDC provider (IRSA) ----
@@ -65,5 +71,5 @@ output "ecr_repository_urls" {
 # ---- Kubeconfig command ----
 output "kubeconfig_command" {
   description = "Command to configure kubectl and update your local context"
-  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.main.name} --profile ${var.aws_profile}"
+  value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${aws_eks_cluster.jerney_ekscluster.name} --profile ${var.aws_profile}"
 }

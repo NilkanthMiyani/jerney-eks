@@ -3,8 +3,7 @@
 - VPC, subnets, Internet Gateway, NAT Gateway(s), route tables
 - EKS control plane (control-plane logging enabled)
 - OIDC provider for IRSA
-- Managed node group
-- EKS managed addons: `vpc-cni`, `coredns`, `kube-proxy`, `metrics-server`, `aws-ebs-csi-driver`
+- Managed node group (with an explicit launch template so workloads get a self-managed node SG)
 - IRSA IAM role (created, not attached to any workload): EBS CSI
 - ECR repositories for the app images (`jerney-frontend`, `jerney-backend`)
 
@@ -15,7 +14,8 @@ infra/
 ├── bootstrap/                # S3 bucket for remote state (run once)
 ├── vpc.tf                    # VPC, IGW, NAT (single or per-AZ), subnets, route tables
 ├── iam.tf                    # EKS cluster role, node group role, EBS CSI IRSA role
-├── eks.tf                    # EKS cluster (logging), OIDC, node group, managed addons
+├── eks.tf                    # EKS cluster (logging), OIDC, node launch template + node group, EBS CSI addon
+├── security-groups.tf        # Explicit node security group (one rule per resource)
 ├── ecr.tf                    # ECR repos for the app images
 ├── locals.tf                 # Local variables (tags, AZs)
 ├── variables.tf              # Every knob, no env-specific defaults
@@ -32,7 +32,8 @@ infra/
 | Output | Purpose |
 |---|---|
 | `cluster_name`, `cluster_endpoint`, `cluster_ca_data` | kubeconfig / API access for bootstrap |
-| `cluster_security_group_id` | Cluster SG for any add-on that needs it |
+| `cluster_security_group_id` | EKS-managed cluster SG for any add-on that needs it |
+| `node_security_group_id` | Explicit node SG attached to the workers |
 | `oidc_provider_arn`, `oidc_provider_url` | Build IRSA trust for additional service accounts |
 | `ebs_csi_role_arn` | Annotate the EBS CSI service account (`eks.amazonaws.com/role-arn`) |
 | `ecr_repository_urls` | App image repos for the bootstrap stage / CI |
@@ -64,8 +65,9 @@ terraform apply -var-file="dev.tfvars"
 
 ## Prod hardening knobs
 
-- **NAT gateways** — one NAT per AZ (HA by default). Non-prod cost is controlled by `az_count` (fewer AZs = fewer NATs), not by a NAT toggle.
-- **`endpoint_public_access` / `public_access_cidrs`** — keep the API endpoint private in prod, or restrict the public endpoint to known CIDRs. Never leave prod open to `0.0.0.0/0`.
+- **NAT gateways** — one NAT per AZ (HA by default), or a single shared NAT Gateway for cost (`single_nat_gateway = true`). Note: managed NAT Gateways do not support security groups; egress control for them is via route tables and subnet NACLs.
+- **`endpoint_public_access` / `public_access_cidrs`** — prod defaults to a private-only endpoint (`endpoint_public_access = false`). Where a public endpoint is enabled (dev/staging), it must be restricted to known office/VPN CIDRs — `0.0.0.0/0` is never allowed. Note: while the endpoint is private, `public_access_cidrs` must stay at the AWS default (`0.0.0.0/0`); it is ignored in that mode.
+- **Security groups** — an explicit node SG is declared in `security-groups.tf` rather than relying on the EKS-managed cluster SG alone. Each rule is a standalone `aws_security_group_rule` for reviewability. Node egress is open as an intentional baseline to tighten later. The ALB's SG is created and managed by the AWS LB Controller at runtime, so it is intentionally not pre-declared here.
 - **Control-plane logging** — all log types (`api`, `audit`, `authenticator`, `controllerManager`, `scheduler`) are shipped to CloudWatch.
 
 ## Resource dependency graph
