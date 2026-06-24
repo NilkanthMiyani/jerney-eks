@@ -45,7 +45,6 @@ output "ebs_csi_role_arn" {
   description = "IRSA role ARN for the EBS CSI driver"
   value       = aws_iam_role.ebs_csi.arn
 }
-
 # ---- Networking ----
 output "vpc_id" {
   description = "VPC ID"

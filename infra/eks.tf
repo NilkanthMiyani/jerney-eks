@@ -57,6 +57,8 @@ resource "aws_iam_openid_connect_provider" "eks" {
   tags = local.common_tags
 }
 
+
+
 # Launch Template for EKS Node Group - allows attaching custom security groups
 resource "aws_launch_template" "node" {
   name_prefix = "${var.cluster_name}-node-"
@@ -124,10 +126,7 @@ resource "aws_eks_node_group" "nodes" {
 # EKS Managed Addons
 # ==============================================================
 
-# aws-ebs-csi-driver — the only Terraform-managed addon. It needs its IRSA
-# role (iam.tf) at creation time and provides storage the cluster needs early,
-# so it stays in the infra layer. Wired to the EBS CSI IRSA role so the
-# controller manages EBS volumes via IRSA (no node credentials).
+# aws-ebs-csi-driver — wired via IRSA
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = aws_eks_cluster.jerney_ekscluster.name
   addon_name               = "aws-ebs-csi-driver"
@@ -142,4 +141,17 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_eks_node_group.nodes,
     aws_iam_role_policy_attachment.ebs_csi,
   ]
+}
+
+# metrics-server — serves the metrics.k8s.io API that HPA reads.
+# It does NOT need EKS Pod Identity because it only talks to Kubernetes, not AWS APIs.
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name = aws_eks_cluster.jerney_ekscluster.name
+  addon_name   = "metrics-server"
+
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = local.common_tags
+
+  depends_on = [aws_eks_node_group.nodes]
 }
