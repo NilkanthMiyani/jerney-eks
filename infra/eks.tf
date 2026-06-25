@@ -11,6 +11,7 @@ resource "aws_eks_cluster" "jerney_ekscluster" {
 
   enabled_cluster_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
 
+
   vpc_config {
     subnet_ids              = concat([for s in aws_subnet.public : s.id], [for s in aws_subnet.private : s.id])
     endpoint_private_access = true
@@ -19,29 +20,10 @@ resource "aws_eks_cluster" "jerney_ekscluster" {
   }
 
   access_config {
-    authentication_mode = "API_AND_CONFIG_MAP"
+    authentication_mode = "API_AND_CONFIG_MAP" # API (EKS Auth) + ConfigMap (Legacy/IAM mapping).
   }
 
   tags = local.common_tags
-}
-
-# ---- EKS Access Entry for the Creator ----
-data "aws_caller_identity" "current" {}
-
-resource "aws_eks_access_entry" "creator" {
-  cluster_name  = aws_eks_cluster.jerney_ekscluster.name
-  principal_arn = data.aws_caller_identity.current.arn
-  type          = "STANDARD"
-}
-
-resource "aws_eks_access_policy_association" "creator" {
-  cluster_name  = aws_eks_cluster.jerney_ekscluster.name
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-  principal_arn = aws_eks_access_entry.creator.principal_arn
-
-  access_scope {
-    type = "cluster"
-  }
 }
 
 # ---- OIDC Provider for IRSA ----

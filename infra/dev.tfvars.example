@@ -19,7 +19,7 @@ disk_size_gb        = 30
 # Public endpoint is OK for dev, but must be restricted to known CIDRs.
 # Wide-open (0.0.0.0/0) is not allowed — set your office/VPN CIDR below.
 endpoint_public_access = true
-public_access_cidrs    = ["<YOUR_OFFICE_OR_VPN_CIDR>/32"]
+public_access_cidrs    = ["<OFFICE_OR_VPN_CIDR>/32"]
 
 # NAT HA
 single_nat_gateway = true
