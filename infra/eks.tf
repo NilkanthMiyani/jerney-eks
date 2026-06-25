@@ -20,7 +20,8 @@ resource "aws_eks_cluster" "jerney_ekscluster" {
   }
 
   access_config {
-    authentication_mode = "API_AND_CONFIG_MAP" # API (EKS Auth) + ConfigMap (Legacy/IAM mapping).
+    authentication_mode                         = "API_AND_CONFIG_MAP" # API (EKS Auth) + ConfigMap (Legacy/IAM mapping).
+    bootstrap_cluster_creator_admin_permissions = true                 # default
   }
 
   tags = local.common_tags
