@@ -108,14 +108,26 @@ This cluster uses a fast onboarding model via AWS IAM Groups. **No Terraform cha
 To onboard a new engineer:
 1. In the AWS Console, create a new IAM User for the engineer (or use AWS SSO).
 2. Add the user to the **DevOps** IAM Group.
-3. Have the engineer configure their local AWS CLI with their credentials (`aws configure`).
-4. Have the engineer run the following command to update their kubeconfig. The `--role-arn` flag is **required** because it tells AWS to assume the `eks-devops-role` (which has cluster admin access) instead of trying to authenticate as their personal IAM user:
+3. Have the engineer configure their local AWS credentials. The cleanest approach is to define a base profile with their keys, and a secondary profile that automatically assumes the DevOps role.
 
-```bash
-aws eks update-kubeconfig \
-  --region <your-region> \
-  --name <cluster_name> \
-  --role-arn arn:aws:iam::<your-account-id>:role/<cluster_name>-devops-role
-```
+   In `~/.aws/config` (or `credentials`):
+   ```ini
+   [profile personal]
+   aws_access_key_id=...
+   aws_secret_access_key=...
+
+   [profile eks-admin]
+   role_arn = arn:aws:iam::<your-account-id>:role/<cluster_name>-devops-role
+   source_profile = personal
+   ```
+
+4. Have the engineer update their kubeconfig using the new `eks-admin` profile. Because the profile is configured to assume the role, the CLI handles the authentication swap automatically:
+
+   ```bash
+   aws eks update-kubeconfig \
+     --region <your-region> \
+     --name <cluster_name> \
+     --profile eks-admin
+   ```
 
 5. The engineer can now run `kubectl get nodes` to verify access.
