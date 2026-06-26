@@ -90,3 +90,41 @@ resource "aws_iam_role_policy_attachment" "ebs_csi" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
   role       = aws_iam_role.ebs_csi.name
 }
+
+# IAM Group + Role for DevOps team
+data "aws_caller_identity" "current" {}
+
+resource "aws_iam_group" "devops" {
+  name = "DevOps"
+}
+
+resource "aws_iam_role" "eks_devops" {
+  name = "${var.cluster_name}-devops-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+      }
+    }]
+  })
+
+  tags = local.common_tags
+}
+
+resource "aws_iam_group_policy" "devops_assume" {
+  name  = "AllowAssumeEKSDevOpsRole"
+  group = aws_iam_group.devops.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action   = "sts:AssumeRole"
+      Effect   = "Allow"
+      Resource = aws_iam_role.eks_devops.arn
+    }]
+  })
+}

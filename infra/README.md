@@ -5,6 +5,7 @@
 - OIDC provider for IRSA
 - Managed node group (with an explicit launch template so workloads get a self-managed node SG)
 - IRSA IAM role (created, not attached to any workload): EBS CSI
+- DevOps IAM Group, Role, and EKS Access Entry for fast team onboarding
 - ECR repositories for the app images (`jerney-frontend`, `jerney-backend`)
 
 ## Layout
@@ -13,8 +14,8 @@
 infra/
 ├── bootstrap/                # S3 bucket for remote state (run once)
 ├── vpc.tf                    # VPC, IGW, NAT (single or per-AZ), subnets, route tables
-├── iam.tf                    # EKS cluster role, node group role, EBS CSI IRSA role
-├── eks.tf                    # EKS cluster (logging), OIDC, node launch template + node group, EBS CSI addon
+├── iam.tf                    # EKS cluster role, node group role, EBS CSI IRSA role, DevOps group & role
+├── eks.tf                    # EKS cluster (logging), OIDC, node group, EBS CSI addon, Access Entries
 ├── security-groups.tf        # Explicit node security group (one rule per resource)
 ├── ecr.tf                    # ECR repos for the app images
 ├── locals.tf                 # Local variables (tags, AZs)
@@ -99,3 +100,22 @@ terraform destroy -var-file="dev.tfvars"
 > Before destroying the cluster, delete the app's `Ingress`/`Service`/`PVC` objects **while their
 > controllers are still running** so the controllers deprovision the AWS resources — then sweep for
 > any orphaned ALBs / SGs / volumes.
+
+## Onboarding New Engineers
+
+This cluster uses a fast onboarding model via AWS IAM Groups. **No Terraform changes are required** when adding or removing engineers.
+
+To onboard a new engineer:
+1. In the AWS Console, create a new IAM User for the engineer (or use AWS SSO).
+2. Add the user to the **DevOps** IAM Group.
+3. Have the engineer configure their local AWS CLI with their credentials (`aws configure`).
+4. Have the engineer run the following command to update their kubeconfig. The `--role-arn` flag is **required** because it tells AWS to assume the `eks-devops-role` (which has cluster admin access) instead of trying to authenticate as their personal IAM user:
+
+```bash
+aws eks update-kubeconfig \
+  --region <your-region> \
+  --name <cluster_name> \
+  --role-arn arn:aws:iam::<your-account-id>:role/<cluster_name>-devops-role
+```
+
+5. The engineer can now run `kubectl get nodes` to verify access.

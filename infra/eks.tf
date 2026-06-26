@@ -27,6 +27,24 @@ resource "aws_eks_cluster" "jerney_ekscluster" {
   tags = local.common_tags
 }
 
+# EKS Cluster Access Entry for DevOps team
+resource "aws_eks_access_entry" "devops" {
+  cluster_name  = aws_eks_cluster.jerney_ekscluster.name
+  principal_arn = aws_iam_role.eks_devops.arn
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "devops_admin" {
+  cluster_name  = aws_eks_cluster.jerney_ekscluster.name
+  principal_arn = aws_iam_role.eks_devops.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+}
+
 # ---- OIDC Provider for IRSA ----
 data "tls_certificate" "eks" {
   url = aws_eks_cluster.jerney_ekscluster.identity[0].oidc[0].issuer
