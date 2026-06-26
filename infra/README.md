@@ -67,8 +67,11 @@ terraform apply -var-file="dev.tfvars"
 ## Prod hardening knobs
 
 - **NAT gateways** — one NAT per AZ (HA by default), or a single shared NAT Gateway for cost (`single_nat_gateway = true`). Note: managed NAT Gateways do not support security groups; egress control for them is via route tables and subnet NACLs.
+
 - **`endpoint_public_access` / `public_access_cidrs`** — prod defaults to a private-only endpoint (`endpoint_public_access = false`). Where a public endpoint is enabled (dev/staging), it must be restricted to known office/VPN CIDRs — `0.0.0.0/0` is never allowed. Note: while the endpoint is private, `public_access_cidrs` must stay at the AWS default (`0.0.0.0/0`); it is ignored in that mode.
+
 - **Security groups** — an explicit node SG is declared in `security-groups.tf` rather than relying on the EKS-managed cluster SG alone. Each rule is a standalone `aws_security_group_rule` for reviewability. Node egress is open as an intentional baseline to tighten later. The ALB's SG is created and managed by the AWS LB Controller at runtime, so it is intentionally not pre-declared here.
+
 - **Control-plane logging** — all log types (`api`, `audit`, `authenticator`, `controllerManager`, `scheduler`) are shipped to CloudWatch.
 
 ## Resource dependency graph
