@@ -46,6 +46,11 @@ output "ebs_csi_role_arn" {
   value       = aws_iam_role.ebs_csi.arn
 }
 
+output "devops_role_arn" {
+  description = "IAM role ARN for DevOps team members to assume for EKS cluster access"
+  value       = aws_iam_role.eks_devops.arn
+}
+
 # ---- Networking ----
 output "vpc_id" {
   description = "VPC ID"

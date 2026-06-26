@@ -127,10 +127,24 @@ resource "aws_eks_node_group" "nodes" {
 # EKS Managed Addons
 # ==============================================================
 
+# Look up the latest compatible addon versions for this cluster version.
+data "aws_eks_addon_version" "ebs_csi" {
+  addon_name         = "aws-ebs-csi-driver"
+  kubernetes_version = aws_eks_cluster.jerney_ekscluster.version
+  most_recent        = true
+}
+
+data "aws_eks_addon_version" "metrics_server" {
+  addon_name         = "metrics-server"
+  kubernetes_version = aws_eks_cluster.jerney_ekscluster.version
+  most_recent        = true
+}
+
 # aws-ebs-csi-driver — wired via IRSA
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = aws_eks_cluster.jerney_ekscluster.name
   addon_name               = "aws-ebs-csi-driver"
+  addon_version            = data.aws_eks_addon_version.ebs_csi.version
   service_account_role_arn = aws_iam_role.ebs_csi.arn
 
   resolve_conflicts_on_update = "OVERWRITE"
@@ -147,8 +161,9 @@ resource "aws_eks_addon" "ebs_csi" {
 # metrics-server — serves the metrics.k8s.io API that HPA reads.
 # It does NOT need EKS Pod Identity because it only talks to Kubernetes, not AWS APIs.
 resource "aws_eks_addon" "metrics_server" {
-  cluster_name = aws_eks_cluster.jerney_ekscluster.name
-  addon_name   = "metrics-server"
+  cluster_name  = aws_eks_cluster.jerney_ekscluster.name
+  addon_name    = "metrics-server"
+  addon_version = data.aws_eks_addon_version.metrics_server.version
 
   resolve_conflicts_on_update = "OVERWRITE"
 
